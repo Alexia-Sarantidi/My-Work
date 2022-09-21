@@ -1,0 +1,1353 @@
+---
+title: "17483_MY461_Exam"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Libraries preparation
+For this project the following libraries are being used. Please make sure you have installed these packages before running the file. 
+(All libraries are attached and detached when needed throughout the project.)
+```{r}
+#### USED IN THE SEMINARS ######
+#install.packages("igraph")
+#install.packages("intergraph")
+#install.packages("sna")
+
+######### EXTRAS ###########
+#install.packages("pheatmap") 
+#install.packages("formattable")
+#install.packages("RColorBrewer")
+#install.packages("maps")
+```
+
+
+Loading required packages
+```{r}
+require(igraph)
+```
+
+Load in the data:
+```{r}
+
+hei_metadata <- read.csv("HEI_metadata.csv", header = T,as.is=TRUE)  
+
+main_el <- read.csv("main_el.csv", header = T,as.is=TRUE) 
+hum_el <- read.csv("hum_el.csv", header = T,as.is=TRUE) #Humanities and Arts subject
+soc_el <- read.csv("soc_el.csv", header = T,as.is=TRUE) #Social sciences, Business and Law subject
+sci_el <- read.csv("sci_el.csv", header = T,as.is=TRUE) #Science, Mathematics and Computing subject
+eng_el <- read.csv("eng_el.csv", header = T,as.is=TRUE) #Engineering, Manufacturing and Construction subject
+```
+
+Generate the main network as directed and weighted.
+The name of the generated network object will be `main_net`.
+```{r}
+#The object "main_el" that was created when reading the csv file is in dataframe format representing an edge list with an extra column representing the weight (number of students) of each edge. Here we transform this dataframe to a directed weighted network.
+
+#Create the directed network with the edge attribute "n" to store the weight:
+temp_main_net <- graph.data.frame(main_el)
+
+#Create the edge attribute "weight" by copying the edge attribute "n". This way the network is labelled as weighted network:
+temp_main_net2<-set.edge.attribute(temp_main_net, "weight", value= E(temp_main_net)$n )
+
+#Delete the edge attribute "n" and get the final version of the main network "main_net":
+main_net<- delete_edge_attr(temp_main_net2,"n")
+
+#Delete igraph objects that were created and won't be used further:
+rm(temp_main_net)
+rm(temp_main_net2)
+```
+
+
+Create the four subject networks as directed and weighted.
+The names of the generated network objects will be `hum_net`, `soc_net`, `sci_net`, `eng_net.`
+```{r}
+
+#Create the directed networks with the edge attribute "n" to store the weight:
+temp_hum_net <- graph.data.frame(hum_el)
+temp_soc_net <- graph.data.frame(soc_el)
+temp_sci_net <- graph.data.frame(sci_el)
+temp_eng_net <- graph.data.frame(eng_el)
+
+#Create the edge attribute "weight" by copying the edge attribute "n". This way the networks are labelled as weighted networks:
+temp_hum_net2<-set.edge.attribute(temp_hum_net, "weight", value= E(temp_hum_net)$n )
+temp_soc_net2<-set.edge.attribute(temp_soc_net, "weight", value= E(temp_soc_net)$n )
+temp_sci_net2<-set.edge.attribute(temp_sci_net, "weight", value= E(temp_sci_net)$n )
+temp_eng_net2<-set.edge.attribute(temp_eng_net, "weight", value= E(temp_eng_net)$n )
+
+
+#Delete the edge attribute "n" and get the final version of the networks:
+hum_net<- delete_edge_attr(temp_hum_net2,"n")
+soc_net<- delete_edge_attr(temp_soc_net2,"n")
+sci_net<- delete_edge_attr(temp_sci_net2,"n")
+eng_net<- delete_edge_attr(temp_eng_net2,"n")
+
+#Delete igraph objects that were created and won't be used further:
+rm(temp_hum_net)
+rm(temp_hum_net2)
+rm(temp_soc_net)
+rm(temp_soc_net2)
+rm(temp_sci_net)
+rm(temp_sci_net2)
+rm(temp_eng_net)
+rm(temp_eng_net2)
+```
+
+
+Generate the reduced main network.
+The name of the generated network object will be `reduced_net`.
+```{r}
+#Delete edges that have a weight less than 5:
+reduced_net<- delete_edges(main_net, E(main_net)[E(main_net)$weight<5])
+
+#Delete vertices that have degree=0 (that are isolates):
+reduced_net<- delete_vertices(reduced_net, V(reduced_net)[degree(reduced_net)==0])
+```
+
+
+# Question 1
+
+*Calculate the overall metrics (density, average path length, transitivity, and reciprocity) for each of the four subject networks (1. humanities and arts, 2. social sciences, business and law, 3. science, mathematics and computing, 4. engineering, manufacturing and construction).*
+```{r}
+hum_dens<- graph.density(hum_net)
+hum_apl<- average.path.length(hum_net, directed = TRUE)
+hum_trans <-transitivity(hum_net, type='global')
+hum_recipr<-reciprocity(hum_net)
+
+soc_dens<- graph.density(soc_net)
+soc_apl<- average.path.length(soc_net, directed = TRUE)
+soc_trans <-transitivity(soc_net, type='global')
+soc_recipr<-reciprocity(soc_net)
+
+sci_dens<- graph.density(sci_net)
+sci_apl<- average.path.length(sci_net, directed = TRUE)
+sci_trans <-transitivity(sci_net, type='global')
+sci_recipr<-reciprocity(sci_net)
+
+eng_dens<- graph.density(eng_net)
+eng_apl<- average.path.length(eng_net, directed = TRUE)
+eng_trans <-transitivity(eng_net, type='global')
+eng_recipr<-reciprocity(eng_net)
+
+
+#Create a table to present the information that were just calculated
+overall_metrics <- data.frame(rbind( 
+                            c(hum_dens, hum_apl, hum_trans, hum_recipr),
+                            c(soc_dens, soc_apl, soc_trans, soc_recipr),
+                            c(sci_dens, sci_apl, sci_trans, sci_recipr),
+                            c(eng_dens, eng_apl, eng_trans, eng_recipr)
+                          ))
+rownames(overall_metrics)<- c('Humanities', 'Social Science', 'Science', 'Engineering')
+colnames(overall_metrics)<- c('Density', 'Average Path Length', 'Transitivity', 'Reciprocity')
+round(overall_metrics,4)#Print the table rounded in 4 decimal places
+```
+
+
+
+
+*Compare each subject network to a random network with the same number of nodes and edges, created with the Erdős–Rényi model.*
+
+Erdös-Rényi Model:
+```{r}
+#The sample_gnm function is used to generate an Erdos-Renyi model, because compared to the sample_gnp network we can control for the exact number of nodes and edges, which is the requirement for the exercise.
+
+#Get the number of vertices and edges in the observed subject networks
+hum_vertices<- vcount(hum_net) 
+hum_edges<- ecount(hum_net)
+
+soc_vertices<- vcount(soc_net) 
+soc_edges<- ecount(soc_net)
+
+sci_vertices<- vcount(sci_net) 
+sci_edges<- ecount(sci_net)
+
+eng_vertices<- vcount(eng_net) 
+eng_edges<- ecount(eng_net)
+
+#Specify the seed for each randomly generated network, to facilitate the discussion later, since results won't change in every new run:
+set.seed(1) 
+ 
+#Generate a random network with the same number of nodes and edges, created with the Erdős–Rényi model for each subject network:
+hum_erdos <- sample_gnm(n=hum_vertices, m=hum_edges, directed = TRUE)
+soc_erdos <- sample_gnm(n=soc_vertices, m=soc_edges, directed = TRUE)
+sci_erdos <- sample_gnm(n=sci_vertices, m=sci_edges, directed = TRUE)
+eng_erdos <- sample_gnm(n=eng_vertices, m=eng_edges, directed = TRUE)
+
+```  
+
+
+To facilitate the discussion on the comparison:
+
+Create a table with the size of each network (the number of vertices):
+```{r}
+number_of_vertices <- data.frame(rbind( c(hum_vertices, hum_edges, hum_dens), 
+                                        c(soc_vertices, soc_edges, soc_dens), 
+                                        c(sci_vertices, sci_edges, sci_dens), 
+                                        c(eng_vertices, eng_edges, eng_dens)
+                              ))
+rownames(number_of_vertices)<- c('Humanities', 'Social Science', 'Science', 'Engineering')
+colnames(number_of_vertices)<- c('Number of Vertices', 'Number of Edges', 'Density')
+
+number_of_vertices
+```
+
+
+Create a table with the metrics for the observed and Erdos-Renyi randomly generated networks:
+```{r}
+obs_vs_erdos_metrics <- data.frame(rbind( 
+                            c(hum_dens, hum_apl, hum_trans, hum_recipr),
+                            c(graph.density(hum_erdos), average.path.length(hum_erdos), transitivity(hum_erdos, type='global'), reciprocity(hum_erdos)),
+                            c(soc_dens, soc_apl, soc_trans, soc_recipr),
+                            c(graph.density(soc_erdos), average.path.length(soc_erdos), transitivity(soc_erdos, type='global'), reciprocity(soc_erdos)),
+                            c(sci_dens, sci_apl, sci_trans, sci_recipr),
+                            c(graph.density(sci_erdos), average.path.length(sci_erdos), transitivity(sci_erdos, type='global'), reciprocity(sci_erdos)),
+                            c(eng_dens, eng_apl, eng_trans, eng_recipr),
+                            c(graph.density(eng_erdos), average.path.length(eng_erdos), transitivity(eng_erdos, type='global'), reciprocity(eng_erdos))
+                              ))
+rownames(obs_vs_erdos_metrics)<- c('Observed Humanities network', 'Random Humanities network', 'Observed Social Sciences network', 'Random Social Sciences network', 'Observed Sciences network', 'Random Sciences network', 'Observed Engineering network', 'Random Engineering network')
+colnames(obs_vs_erdos_metrics)<- c('Density', 'Average Path Length', 'Transitivity', 'Reciprocity')
+
+round(obs_vs_erdos_metrics, 4) #Print the table rounded in 4 decimal places
+```
+
+
+Create a barplot that compares the metrics across the 8 networks
+```{r}
+barplot(as.matrix(obs_vs_erdos_metrics[-1])
+        ,beside = TRUE
+        ,col=c(2, 2, 7, 7, 3 ,3, 4,4)
+        ,density = c(1000,20)
+        ,cex.names=0.6
+        ,legend.text= TRUE
+        ,args.legend=list(x=29, y=2.5)
+        ,main="Observed vs Erdos-Renyi network measures"
+        )
+```
+
+
+
+
+# Question 2
+
+Calculate the centrality measures:
+```{r}
+#---Degree without weights---
+main_deg_in <- degree(main_net, mode="in")
+
+#---Degree with weights---
+main_wdeg_in<-strength(main_net,  mode = "in", loops = FALSE, weights = E(main_net)$weight)
+
+#---PageRank Centrality---
+#This function interprets edge weights as connection strengths.
+main_pr <- page.rank(main_net, directed= TRUE, weights=E(main_net)$weight )$vector
+```
+
+
+Identify the university that has the highest value for each centrality measure:
+
+
+Degree:
+```{r}
+#---In Degree---
+
+#Print the universities and their total degree in a descending order:
+main_deg_in_df<-  data.frame(cbind(V(main_net)$name, main_deg_in))
+
+colnames(main_deg_in_df)=c("University", "University Indegree")
+
+head(main_deg_in_df[(order(as.numeric(main_deg_in_df$'University Indegree'), decreasing = TRUE)),])
+
+
+#---Weighted Degree---
+#Print the universities and their total degree in a descending order:
+main_wdeg_in_df<-  data.frame(cbind(V(main_net)$name, main_wdeg_in))
+colnames(main_wdeg_in_df)=c("University", "Student Indegree")
+
+head(main_wdeg_in_df[(order(as.numeric(main_wdeg_in_df$'Student Indegree'), decreasing = TRUE)),])
+
+```
+
+PageRank:
+```{r}
+#Print the universities and their PageRank in a descending order:
+main_pr_df<-  data.frame(cbind(V(main_net)$name, round(main_pr,4)))
+colnames(main_pr_df)=c("Uni", "PageRank")
+
+head(main_pr_df[(order(as.numeric(main_pr_df$PageRank), decreasing = TRUE)),])
+```
+
+
+*Plot histograms of your two chosen centrality measures, and overlay vertical lines demarcating the values for each of the London universities.*
+
+In Degree
+```{r}
+hist(main_deg_in, main="Indegree histogram on number of universities", xlab="Number of incoming universities")
+
+#draw vertical lines to indicate the degree of the London Universities 
+abline(v=main_deg_in[which(V(main_net)$name =="UK LONDON015")],col="blue",lwd=2)  
+abline(v=main_deg_in[which(V(main_net)$name =="UK LONDON017")],col="cyan",lwd=2)
+abline(v=main_deg_in[which(V(main_net)$name =='UK LONDON029')],col="purple",lwd=2)
+abline(v=main_deg_in[which(V(main_net)$name =='UK LONDON031')],col="green",lwd=2)
+abline(v=main_deg_in[which(V(main_net)$name =="UK LONDON020")],col="red",lwd=2)
+
+
+# Add legend
+legend("topright", 
+       inset=.02, 
+       legend=c('Imperial College London', 
+                'Kings College London',
+                'City University London', 
+                'Queen Mary University of London',
+                'London School of Economics','and Political Science'), 
+       col=c('blue', 'cyan', 'purple','green', 'red','white'), #the white colour is used so that the LSE name which is long can be written in 2 lines, but without a colour in the second line
+       #text.font =8,
+       cex =0.7, # size of the letters
+       lty=1,
+       title = "LONDON UNIVERSITIES"
+       )
+```
+
+In weighted Degree
+```{r}
+hist(main_wdeg_in, main="Indegree histogram on number of students", xlab="Number of incoming students")
+
+#draw vertical lines to indicate the degree of the London Universities 
+abline(v=main_wdeg_in[which(V(main_net)$name =="UK LONDON015")],col="blue",lwd=2)  
+abline(v=main_wdeg_in[which(V(main_net)$name =="UK LONDON017")],col="cyan",lwd=2)
+abline(v=main_wdeg_in[which(V(main_net)$name =='UK LONDON029')],col="purple",lwd=2)
+abline(v=main_wdeg_in[which(V(main_net)$name =='UK LONDON031')],col="green",lwd=2)
+abline(v=main_wdeg_in[which(V(main_net)$name =="UK LONDON020")],col="red",lwd=2)
+
+# Add legend
+legend("topright", 
+       inset=.02, 
+       legend=c('Imperial College London', 
+                'Kings College London',
+                'City University London', 
+                'Queen Mary University of London',
+                'London School of Economics','and Political Science'), 
+       col=c('blue', 'cyan', 'purple','green', 'red','white'), #the white colour is used so that the LSE name which is long can be written in 2 lines, but without a colour in the second line
+       #text.font =8,
+       cex =0.7, # size of the letters
+       lty=1,
+       title = "LONDON UNIVERSITIES"
+       )
+```
+
+PageRank:
+```{r}
+hist(main_pr, main="PageRank histogram", xlab= "PageRank value")
+
+#draw vertical lines to indicate the PageRank of the London Universities 
+abline(v=main_pr[which(V(main_net)$name =="UK LONDON015")],col="blue",lwd=2)  
+abline(v=main_pr[which(V(main_net)$name =="UK LONDON017")],col="cyan",lwd=2)
+abline(v=main_pr[which(V(main_net)$name =='UK LONDON029')],col="purple",lwd=2)
+abline(v=main_pr[which(V(main_net)$name =='UK LONDON031')],col="green",lwd=2)
+abline(v=main_pr[which(V(main_net)$name =="UK LONDON020")],col="red",lwd=2)
+
+
+# Add legend
+legend("topright", 
+       inset=.02, 
+       legend=c('Imperial College London', 
+                'Kings College London',
+                'City University London', 
+                'Queen Mary University of London',
+                'London School of Economics','and Political Science'), 
+       col=c('blue', 'cyan', 'purple','green', 'red','white'), #the white colour is used so that the LSE name which is long can be written in 2 lines, but without a colour in the second line
+       #text.font =8,
+       cex =0.7, # size of the letters
+       lty=1,
+       title = "LONDON UNIVERSITIES"
+       )
+```
+
+
+
+
+# Question 3
+
+*Degree distributions*
+Get the probability of each exact in and out degree. In other words, the proportion of nodes with exactly that degree for each indegree and outdegree from 0 to max(indegree) and max(outdegree) equivalently. This information will form the y-axis in the plots later on.
+```{r}
+degree_distr_parameters<- function(the_network, degree_mode){
+  
+###Get the indegree, outdegree or total distribution. In particular, get  a numeric vector of the same length as the maximum degree plus one. The first element is the relative frequency zero degree vertices, the second vertices with degree one, etc.
+prob <- degree.distribution(the_network, mode=degree_mode)
+
+
+###Get the in and out degrees for each vertex. This information will form the x-axis in the plots later on.
+#Get the indegree of each vertex
+deg <- degree(the_network, mode=degree_mode)
+
+###############################################################################################################
+###To make the plots that will follow easier to read and less messy, we remove indegree and outdegree values whose probability = 0. (However at this stage we keep the data that informs us about the probability when indegree and outdegree = 0, as it can support our data exploration and understanding, even though it will zoom out our plots a bit).  
+
+###Indegree Probability = 0###
+#Get the position of elements (indegrees) whose probability is non-zero
+prob_nz_pos <- which(prob!=0)
+
+#Remove indegrees with probability=0. 
+prob_nz_prob <- prob[prob_nz_pos]
+
+#Create a vector that includes all the distinct indegree values, including zero.
+degree_scale <- 0:max(deg) 
+
+#From the above vector (degree_scale) remove all the zero probability indegree values, so create a vector including all the non-zero-probability indegree values.
+degree_nz_prob <- degree_scale[prob_nz_pos]
+
+
+
+#In order to plot the complementary cumulative degree distribution function in a log-log scale, we need to remove degree = 0 and its probability, since log(0) is not defined.  
+
+# Remove degree=0. The first element of the prob vector contains the proportion of the zero degrees.
+
+prob_nz_probdegree <- prob_nz_prob[-1]
+degree_nz_probdegree <- degree_nz_prob[-1]
+
+outlist <- list( prob_nz_prob, degree_nz_prob, deg, prob_nz_probdegree, degree_nz_probdegree)
+return(outlist)
+}
+```
+
+
+
+Plot the indegree and outdegree distributions with probability on the y-axis.
+Indegree distributions:
+```{r}
+hum_indegree_distr<-degree_distr_parameters(hum_net, 'in')
+soc_indegree_distr<-degree_distr_parameters(soc_net, 'in')
+sci_indegree_distr<-degree_distr_parameters(sci_net, 'in')
+eng_indegree_distr<-degree_distr_parameters(eng_net, 'in')
+
+#Vectors that store the probabilities of the indegree values only when the probability > 0
+hum_prob_nz_prob_in<- as.numeric(unlist(hum_indegree_distr[1]))
+soc_prob_nz_prob_in<- as.numeric(unlist(soc_indegree_distr[1]))
+sci_prob_nz_prob_in<- as.numeric(unlist(sci_indegree_distr[1]))
+eng_prob_nz_prob_in<- as.numeric(unlist(eng_indegree_distr[1]))
+
+#Vectors that store the indegree values only when the probability of them is greater than 0
+hum_degree_nz_prob_in <-as.numeric(unlist(hum_indegree_distr[2]))
+soc_degree_nz_prob_in <-as.numeric(unlist(soc_indegree_distr[2]))
+sci_degree_nz_prob_in <-as.numeric(unlist(sci_indegree_distr[2]))
+eng_degree_nz_prob_in <-as.numeric(unlist(eng_indegree_distr[2]))
+
+#Vectors that store the indegree value of each vertex
+hum_deg_in <-as.numeric(unlist(hum_indegree_distr[3]))
+soc_deg_in <-as.numeric(unlist(soc_indegree_distr[3]))
+sci_deg_in <-as.numeric(unlist(sci_indegree_distr[3]))
+eng_deg_in <-as.numeric(unlist(eng_indegree_distr[3]))
+
+
+#Vectors that store the probabilities of the indegree values  when the probability > 0 or its degree > 0
+hum_prob_nz_probdeg_in<- as.numeric(unlist(hum_indegree_distr[4]))
+soc_prob_nz_probdeg_in<- as.numeric(unlist(soc_indegree_distr[4]))
+sci_prob_nz_probdeg_in<- as.numeric(unlist(sci_indegree_distr[4]))
+eng_prob_nz_probdeg_in<- as.numeric(unlist(eng_indegree_distr[4]))
+
+#Vectors that store the indegree values when the probability > 0 or the degree > 0
+hum_deg_nz_probdeg_in<- as.numeric(unlist(hum_indegree_distr[5]))
+soc_deg_nz_probdeg_in<- as.numeric(unlist(soc_indegree_distr[5]))
+sci_deg_nz_probdeg_in<- as.numeric(unlist(sci_indegree_distr[5]))
+eng_deg_nz_probdeg_in<- as.numeric(unlist(eng_indegree_distr[5]))
+```
+
+```{r}
+ylimit <- max(hum_prob_nz_prob_in, soc_prob_nz_prob_in, sci_prob_nz_prob_in, eng_prob_nz_prob_in)
+
+# Plot the degree distributions in one graph
+plot(hum_prob_nz_prob_in ~ hum_degree_nz_prob_in, xlab='Indegree d', ylab='Probability P(X=d)', ylim=c(0, ylimit),
+     col='red', type = 'b', main= 'Indegree distributions')
+points(soc_prob_nz_prob_in ~ soc_degree_nz_prob_in, col='blue', type = 'b')
+points(sci_prob_nz_prob_in ~ sci_degree_nz_prob_in, col='black', type = 'b')
+points(eng_prob_nz_prob_in ~ eng_degree_nz_prob_in, col='green', type = 'b')
+
+
+# Add legend
+legend('topright', inset=.02, legend=c('Humanities', 'Social Science', 'Science', 'Engineering'), 
+       col=c('red', 'blue', 'black',  'green'), lty=1)
+```
+
+
+```{r}
+ylimit <- max(hum_prob_nz_prob_in, soc_prob_nz_prob_in, sci_prob_nz_prob_in, eng_prob_nz_prob_in)
+
+# Plot the degree distributions in one graph
+plot(hum_prob_nz_prob_in ~ hum_degree_nz_prob_in, xlab='Indegree d', ylab='Probability P(X=d)', ylim=c(0, ylimit),
+     col='red', type = 'b', main= 'Indegree distributions with the median indegree')
+points(soc_prob_nz_prob_in ~ soc_degree_nz_prob_in, col='blue', type = 'b')
+points(sci_prob_nz_prob_in ~ sci_degree_nz_prob_in, col='black', type = 'b')
+points(eng_prob_nz_prob_in ~ eng_degree_nz_prob_in, col='green', type = 'b')
+
+
+# Add legend
+legend('topright', inset=.02, legend=c('Humanities', 'Social Science', 'Science', 'Engineering'), 
+       col=c('red', 'blue', 'black',  'green'), lty=1)
+
+abline(v=median(hum_deg_in),col="red",lwd=3) #draw a vertical red line to indicate the median  
+abline(v=median(soc_deg_in),col="blue",lwd=3)
+abline(v=median(sci_deg_in),col="black",lwd=3)
+abline(v=median(eng_deg_in),col="green",lwd=3)
+```
+
+
+
+Find the degree with the highest probability in the Engineering network, in order to remove it and manage to zoom in the plot.
+```{r}
+eng_maxdegree<- which(eng_prob_nz_probdeg_in==max(eng_prob_nz_probdeg_in))
+cat(paste("The degree with the highest probability in the Engineering network is degree",eng_maxdegree,"with probability", round(max(eng_prob_nz_probdeg_in),4)))
+```
+
+
+
+
+Zoom in the plot by removing the degree= 0 and degree=1:
+```{r}
+ylimit <- max(hum_prob_nz_probdeg_in[-1], soc_prob_nz_probdeg_in[-1], sci_prob_nz_probdeg_in[-1] , eng_prob_nz_probdeg_in[-1])
+
+xlimit<- max(hum_deg_nz_probdeg_in[-1],soc_deg_nz_probdeg_in[-1], sci_deg_nz_probdeg_in[-1],eng_deg_nz_probdeg_in[-1] )
+
+# Plot the degree distributions in one graph
+plot(hum_prob_nz_probdeg_in[-1] ~ hum_deg_nz_probdeg_in[-1], xlab='Indegree d', ylab='Probability P(X=d)', ylim=c(0, ylimit), xlim=c(2,xlimit),
+     col='red', type = 'b', main= 'Indegree distributions - (degree > 1)')
+points(soc_prob_nz_probdeg_in[-1] ~ soc_deg_nz_probdeg_in[-1], col='blue', type = 'b')
+points(sci_prob_nz_probdeg_in[-1] ~ sci_deg_nz_probdeg_in[-1], col='black', type = 'b')
+points(eng_prob_nz_probdeg_in[-1] ~ eng_deg_nz_probdeg_in[-1], col='green', type = 'b')
+
+
+# Add legend
+legend('topright', inset=.02, legend=c('Humanities', 'Social Science', 'Science', 'Engineering'), 
+       col=c('red', 'blue', 'black',  'green'), lty=1)
+```
+```{r}
+indegree_summary<- data.frame(cbind(
+                                    c(sum(hum_deg_in), sum(soc_deg_in), sum(sci_deg_in), sum(eng_deg_in)),
+                                    c(max(hum_deg_in), max(soc_deg_in), max(sci_deg_in), max(eng_deg_in)),
+                                    c(hum_vertices, soc_vertices, sci_vertices, eng_vertices)
+                                    )
+                              )
+colnames(indegree_summary)<- c('Indegree', 'Max indegree', 'Number of vertices')
+rownames(indegree_summary)<- c('Humanities', 'Social Science', 'Science', 'Engineering')
+indegree_summary
+
+```
+
+Plot the indegree distributions based on the actual number of universities that sent students to each university (vertex) and not based on the percentage. This is because all 4 networks are of different size and hence the percentages that were calculated before are not indicative of the number of universities from which a university received students.
+```{r}
+
+#Calculate the number of universities that have each indegree, by multiplying their probability with the total number of edges that exist in each network.
+hum_degree_number_in <- hum_prob_nz_prob_in * hum_edges
+soc_degree_number_in <- soc_prob_nz_prob_in * soc_edges
+sci_degree_number_in <- sci_prob_nz_prob_in * sci_edges
+eng_degree_number_in <- eng_prob_nz_prob_in * eng_edges
+
+ylimit <- max(hum_degree_number_in, soc_degree_number_in, sci_degree_number_in, eng_degree_number_in)
+
+# Plot the degree distributions in one graph
+plot(hum_degree_number_in ~ hum_degree_nz_prob_in, xlab='Indegree d', ylab='Number of incoming Universities', ylim=c(0, ylimit),
+     col='red', type = 'b', main= 'Indegree distributions in numbers of in-univerisities')
+points(soc_degree_number_in ~ soc_degree_nz_prob_in, col='blue', type = 'b')
+points(sci_degree_number_in ~ sci_degree_nz_prob_in, col='black', type = 'b')
+points(eng_degree_number_in ~ eng_degree_nz_prob_in, col='green', type = 'b')
+
+
+# Add legend
+legend('topright', inset=.02, legend=c('Humanities', 'Social Science', 'Science', 'Engineering'), 
+       col=c('red', 'blue', 'black',  'green'), lty=1, title='NETWORKS')
+```
+
+
+
+**Plot the indegree and outdegree distributions as complementary cumulative distribution functions on a log-log scale. Plot the two distribution functions in the same figure.** 
+
+Plot the indegree and outdegree *complementary cumulative distribution function*, P(X≥x). In other words, plot the probability of observing a particular indegree (or outdegree equivalently) or larger in the data on a log-log scale.
+```{r}
+######Indegree##########
+# Create a function that loops over the indegree probability vector and sum all values from the current position until the end
+ccdf<- function(prob_vector){
+  
+  ccdf_in <- NULL
+  for (i in 1:length(prob_vector)) {
+  ccdf_in[i] = sum( prob_vector[ seq(i, length(prob_vector)) ] )
+  }
+  
+  return(ccdf_in)
+  
+}
+
+hum_ccdf<- ccdf(hum_prob_nz_probdeg_in)
+soc_ccdf<- ccdf(soc_prob_nz_probdeg_in)
+sci_ccdf<- ccdf(sci_prob_nz_probdeg_in)
+eng_ccdf<- ccdf(eng_prob_nz_probdeg_in)
+
+# Plot log complementary indegree CDF on y axis and log indegrees on x axis
+plot(hum_ccdf ~ hum_deg_nz_probdeg_in, xlab='Indegree d', ylab='Complementary CDF P(X>=d)', log='xy', col='red', type = 'b', main= "Indegree CCDFs in log-log scale")
+
+points(soc_ccdf ~ soc_deg_nz_probdeg_in, col='blue', type = 'b')
+points(sci_ccdf ~ sci_deg_nz_probdeg_in, col='black', type = 'b')
+points(eng_ccdf ~ eng_deg_nz_probdeg_in, col='green', type = 'b')
+
+# Add legend
+legend('bottomleft', inset=.02, legend=c('Humanities', 'Social Science', 'Science', 'Engineering'), 
+       col=c('red', 'blue', 'black',  'green'), lty=1)
+
+
+```
+
+Fit a straight line to the tail of the data:
+```{r}
+######Indegree- straight line to the tail#######
+## Fit a straight line to the tail of the data, excluding the first 100 degrees
+hum_reg <- lm( log(tail(hum_ccdf,-62) ) ~ log(tail(hum_deg_nz_probdeg_in,-62)) )
+hum_coeff <- coef(hum_reg)
+
+soc_reg <- lm( log(tail(soc_ccdf,-50) ) ~ log(tail(soc_deg_nz_probdeg_in,-50)) )
+soc_coeff <- coef(soc_reg)
+
+sci_reg <- lm( log(tail(sci_ccdf,-30) ) ~ log(tail(sci_deg_nz_probdeg_in,-30)) )
+sci_coeff <- coef(sci_reg)
+
+eng_reg <- lm( log(tail(eng_ccdf,-30) ) ~ log(tail(eng_deg_nz_probdeg_in,-30)) )
+eng_coeff <- coef(eng_reg)
+
+
+# Plot the data
+plot(hum_ccdf ~ hum_deg_nz_probdeg_in, xlab='Indegree', ylab='CCDF', log='xy', col='red',  type = 'b',
+     main="Indegree CCDF \n with regression fitted in all data")
+
+points(soc_ccdf ~ soc_deg_nz_probdeg_in, col='blue', type = 'b')
+points(sci_ccdf ~ sci_deg_nz_probdeg_in, col='black', type = 'b')
+points(eng_ccdf ~ eng_deg_nz_probdeg_in, col='green', type = 'b')
+
+# Use the coefficient to fit a straight line
+power_law_fit <- function(x) exp( hum_coeff[[1]] + hum_coeff[[2]]*log(x) )
+curve(power_law_fit, col = "red", add = TRUE)
+
+power_law_fit <- function(x) exp( soc_coeff[[1]] + soc_coeff[[2]]*log(x) )
+curve(power_law_fit, col = "blue", add = TRUE)
+
+power_law_fit <- function(x) exp( sci_coeff[[1]] + sci_coeff[[2]]*log(x) )
+curve(power_law_fit, col = "black", add = TRUE)
+
+power_law_fit <- function(x) exp( eng_coeff[[1]] + eng_coeff[[2]]*log(x) )
+curve(power_law_fit, col = "green", add = TRUE)
+
+
+# Add legend
+legend('bottomleft', inset=.02, legend=c('Humanities', 'Social Science', 'Science', 'Engineering'), 
+       col=c('red', 'blue', 'black',  'green'), lty=1)
+
+
+```
+
+*Redo the analyses in problem 1 above but using the configuration model (instead of the Erdős–Rényi model).*
+
+
+Configuration Model:
+```{r}
+#We have already defined the indegree for each vertex and stored this information in the numeric vectors 'hum_deg_in' etc. We also need vectors that store the outdegree of each vertex. We calculate this here. These vectors are used here to generate a configuration model accordingly.
+
+hum_deg_out =as.numeric(degree(hum_net, mode="out"))
+soc_deg_out =as.numeric(degree(soc_net, mode="out"))
+sci_deg_out =as.numeric(degree(sci_net, mode="out"))
+eng_deg_out =as.numeric(degree(eng_net, mode="out"))
+
+  set.seed(1) #specify the seed for each randomly generated network, to facilitate the discussion later, since results won't change in every new run 
+  hum_config <- sample_degseq(out.deg = hum_deg_out, in.deg = hum_deg_in, method = "simple") #the simple method is selected since it allows for loop and multiple edges to be generated. The initial dataset we loaded has no multiple edges for each direction, but has loops.
+soc_config <- sample_degseq(out.deg = soc_deg_out, in.deg = soc_deg_in, method = "simple")
+sci_config <- sample_degseq(out.deg =sci_deg_out, in.deg = sci_deg_in, method = "simple")
+eng_config <- sample_degseq(out.deg = eng_deg_out, in.deg = eng_deg_in, method = "simple")
+
+  
+  
+hum_config_dens<- graph.density(hum_config)
+hum_config_apl<- average.path.length(hum_config, directed = TRUE)
+hum_config_trans <-transitivity(hum_config, type='global')
+hum_config_recipr<-reciprocity(hum_config)
+
+soc_config_dens<- graph.density(soc_config)
+soc_config_apl<- average.path.length(soc_config, directed = TRUE)
+soc_config_trans <-transitivity(soc_config, type='global')
+soc_config_recipr<-reciprocity(soc_config)
+
+sci_config_dens<- graph.density(sci_config)
+sci_config_apl<- average.path.length(sci_config, directed = TRUE)
+sci_config_trans <-transitivity(sci_config, type='global')
+sci_config_recipr<-reciprocity(sci_config)
+
+eng_config_dens<- graph.density(eng_config)
+eng_config_apl<- average.path.length(eng_config, directed = TRUE)
+eng_config_trans <-transitivity(eng_config, type='global')
+eng_config_recipr<-reciprocity(eng_config)
+
+
+#Create a table to present the information that were just calculated
+config_overall_metrics <- data.frame(rbind( 
+                            c(hum_config_dens, hum_config_apl, hum_config_trans, hum_config_recipr),
+                            c(soc_config_dens, soc_config_apl, soc_config_trans, soc_config_recipr),
+                            c(sci_config_dens, sci_config_apl, sci_config_trans, sci_config_recipr),
+                            c(eng_config_dens, eng_config_apl, eng_config_trans, eng_config_recipr)
+                          ))
+rownames(config_overall_metrics)<- c('Humanities', 'Social Science', 'Science', 'Engineering')
+colnames(config_overall_metrics)<- c('Density', 'Average Path Length', 'Transitivity', 'Reciprocity')
+round(config_overall_metrics,4)
+```
+
+Create table that combines the metrics for the observed and Configuration models in order to use it in a barplot that compares them all.
+```{r}
+obs_vs_config_metrics <- data.frame(rbind( 
+                            c(hum_dens, hum_apl, hum_trans, hum_recipr),
+                            c(hum_config_dens, hum_config_apl, hum_config_trans, hum_config_recipr),
+                            c(soc_dens, soc_apl, soc_trans, soc_recipr),
+                            c(soc_config_dens, soc_config_apl, soc_config_trans, soc_config_recipr),
+                            c(sci_dens, sci_apl, sci_trans, sci_recipr),
+                            c(sci_config_dens, sci_config_apl, sci_config_trans, sci_config_recipr),
+                            c(eng_dens, eng_apl, eng_trans, eng_recipr),
+                            c(eng_config_dens, eng_config_apl, eng_config_trans, eng_config_recipr)
+                              ))
+rownames(obs_vs_config_metrics)<- c('Observed Humanities', 'Configuration Humanities', 'Observed Social Sciences', 'Configuration Social Sciences', 'Observed Sciences', 'Configuration Sciences', 'Observed Engineering', 'Configuration Engineering')
+colnames(obs_vs_config_metrics)<- c('Density', 'Average Path Length (L)', 'Transitivity', 'Reciprocity')
+
+
+
+
+barplot(as.matrix(obs_vs_config_metrics[-1])
+        ,beside = TRUE
+        ,col=c(2, 2, 7, 7, 3 ,3, 4,4)
+        ,density = c(1000,30)
+        ,cex.names=0.6
+        ,legend.text= TRUE
+        ,args.legend=list(x=29, y=2.5, title='NETWORKS')
+        ,main="Observed vs Configuration network measures"
+        )
+```   
+
+
+
+
+
+
+
+# Question 4
+
+*Calculate the probability of a student exchange tie within and between each region (using a blockmodel approach) for the reduced network.*
+
+Add the university region as a vertex attribute in the reduced network:
+```{r}
+attribute_vector <- c() #initialize the vector to store the values of the new attribute
+for (i in V(reduced_net)$name){ #loop through the names of vertices of the network
+  attribute_vertex_value <- hei_metadata[hei_metadata$Erasmus.ID == i,][1,'Region']#select value from the selected column when the Erasmus.ID column from the metadata file matched the name of the vertex
+  attribute_vector <- c(attribute_vector, attribute_vertex_value) 
+}
+V(reduced_net)$region <- attribute_vector #Make the created vector a vertex attribute
+```
+
+
+Generate a new (numeric) vertex attribute that will link the region of each university to a number. This number will be used in the blockmodel function later on. Before doing that we print the distinct values of the region vertex attribute, to use them in the code after and we ensure that there are no universities (vertices) with a missing value on the region.
+
+```{r}
+table(V(reduced_net)$region)
+```
+
+
+```{r}
+#Generate a numeric region vertex attribute
+V(reduced_net)$region_n<- ifelse (V(reduced_net)$region == "Eastern Europe",1, #Each university will have number 1 if its region is Eastern Europe
+               ifelse(V(reduced_net)$region == "Northern Europe",2, #Each university will have number 2 if its caste is Northern Europe
+                         ifelse(V(reduced_net)$region == "Southern Europe",3, 4))) #Each university will have number 3 if its region is Southern Europe and number 4 otherwise (meaning Western Europe)
+```
+
+
+
+
+Switch packages from igraph to the statnet suite of packages, which includes the sna package, in order to use the `blockmodel()` function. 
+```{r}
+require(intergraph)
+detach(package:igraph)
+require(sna)
+```
+Transform the igraph graph object (reduced_net) into a statnet graph object (reduced_statnet)
+```{r}
+reduced_statnet<-asNetwork(reduced_net) ## this is the function from intergraph that takes a igraph graph object and makes it into a statnet graph object
+```
+
+Determine the probability of ties within and between the regions:
+```{r}
+reduced_bm<-blockmodel(reduced_statnet,ec = reduced_statnet %v% "region_n")$block.model ## save the matrix showing the probability of ties within and between each region, the block model
+```
+
+
+```{r}
+#Print the matrix by using the pheatmap library and method, which visualizes it in a way to facilitate the discussion after. The method colour grades the matrix based on the magnitude of the value. The darker the colour, the higher the value.
+library("pheatmap")
+
+pheatmap(reduced_bm #the matrix
+         ,display_numbers = TRUE
+         ,number_format = "%.4f" #specifies the decimal places to display
+         ,fontsize_number= 12
+         ,number_color= "black"
+         ,cellwidth = 55
+         ,cellheight = 35
+         ,cluster_row = FALSE
+         ,cluster_cols = FALSE
+         ,color = colorRampPalette(c("white", "red"))(50) #the colours to use
+         )
+
+detach(package:pheatmap)
+```
+```{r}
+reduced_bm_rowsum<-cbind(reduced_bm, total = rowSums(reduced_bm))#create a new column named "total" that will store the sum from each row, in other words the number of households that belong to each caste.
+reduced_bm_colsum<-rbind(reduced_bm_rowsum, total = colSums(reduced_bm_rowsum))#create a new row named "total" that will store the sum from each column, in other words the number of households that belong to each membership/cluster.
+reduced_bm_colsum
+
+```
+
+
+
+*Evaluate the structural equivalency of the countries using the main network.*
+
+```{r}
+require(igraph) 
+require(gplots)
+```
+
+```{r}
+#Transform the igraph nework object to an adjacency matrix
+main_adj<- get.adjacency(main_net, names=TRUE, attr= "weight")
+
+#Transform the adjacency matrix to a simple matrix
+main_matrix <- as.matrix(main_adj)
+
+#Get the transpose of the main adjacency matrix and append it to the main_matrix, because the main network is directed and hence we want to consider the corresponce between nodes for both outgoing and incoming ties
+main_adj_transp<-t(main_matrix)
+
+#Stacking one matrix on top of the other
+main_matrix_2 <- rbind(main_matrix,   
+                  main_adj_transp)   
+
+#We want larger values to mean greater distance, so we’ll subtract the Pearson correlation values from 1, and tell R to treat it as a distance measure. So the matrix below is a matrix of dissimilarity.
+main_dist <- as.dist(1 - cor(main_matrix_2), upper = F)
+
+```
+So, now we have the distances between each pair of nodes, meaning our measure of their structural equivalence.
+
+
+*Use the results of the structural equivalency calculation to divide the countries into six equivalency classes.*
+
+Divide universities into 6 clusters using  hierarchical clustering:
+```{r}
+main_dend <- hclust(main_dist)
+
+main_partit <- cutree(main_dend, k = 6)
+```
+
+
+
+*Plot the main network with nodes positioned by their latitude/longitude (so that your network should look roughly like a map of Europe) and nodes coloured by their equivalency class.*
+
+
+Add the university latitude and longtitude as vertex attributes in the main network:
+```{r}
+#Add latitude
+attribute_vector <- c() #initialize the vector to store the values of the new attribute
+for (i in V(main_net)$name){ #loop through the names of vertices of the network
+  attribute_vertex_value <- hei_metadata[hei_metadata$Erasmus.ID == i,][1,'Latitude']#select value from the selected column when the Erasmus.ID column from the metadata file matched the name of the vertex
+  attribute_vector <- c(attribute_vector, attribute_vertex_value) 
+}
+V(main_net)$latitude <- attribute_vector #Make the created vector a vertex attribute
+
+
+
+#Add longtitude
+attribute_vector <- c() #initialize the vector to store the values of the new attribute
+for (i in V(main_net)$name){ #loop through the names of vertices of the network
+  attribute_vertex_value <- hei_metadata[hei_metadata$Erasmus.ID == i,][1,'Longitude']#select value from the selected column when the Erasmus.ID column from the metadata file matched the name of the vertex
+  attribute_vector <- c(attribute_vector, attribute_vertex_value) 
+}
+V(main_net)$longitude <- attribute_vector #Make the created vector a vertex attribute
+```
+Calculate total, in and out degrees for each node in the main network and make them vertex attributes. They will be used in the plot later on.
+```{r}
+V(main_net)$degree<-degree(main_net)
+
+V(main_net)$wdegree<-strength(main_net,  mode = "all", loops = FALSE, weights = E(main_net)$weight)
+```
+
+
+Switch packages from igraph to the statnet suite of packages, which includes the sna package:
+```{r}
+require(intergraph)
+detach(package:igraph)
+require(sna)
+library(network)  # basic 'statnet' network library
+library(maps) # basic R map plotting library
+```
+
+
+Transform the igraph graph object (main_net) into a statnet graph object (main_net)
+```{r}
+main_statnet<-asNetwork(main_net) ## this is the function from intergraph that takes a igraph graph object and makes it into a statnet graph object
+```
+
+Create a vector with the European countries as they appear in the region of the world database of the`map()` function:
+```{r}
+europe<- c("Albania","Andorra","Austria","Belarus","Belgium", "Bosnia and Herzegovina", "Bulgaria","Croatia", "Cyprus", "Czech Republic", "Denmark","Estonia",
+           "Finland", "France",
+"Germany",
+"Greece",
+"Hungary",
+"Iceland",
+"Ireland",
+"Italy",
+"Kosovo",
+"Latvia",
+"Liechtenstein",
+"Lithuania",
+"Luxembourg",
+"Republic of Macedonia",
+"Malta",
+"Moldova",
+"Monaco",
+"Montenegro",
+"Netherlands",
+"Norway",
+"Poland",
+"Portugal",
+"Romania",
+"San Marino",
+"Serbia",
+"Slovakia",
+"Slovenia",
+"Spain",
+"Sweden",
+"Switzerland",
+"Turkey",
+"Ukraine",
+"UK",
+"Vatican City",
+"Canary Islands"
+)
+```
+
+
+Plot the main network on top of the map of europe:
+```{r}
+library('RColorBrewer')
+pal7<- brewer.pal(7,"Paired")
+
+# plot the map for the background
+x<-map(database= 'world',  region =europe, fill=TRUE, col='#f2f2f2', border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_statnet,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_statnet%v%'longitude',main_statnet%v%'latitude'),  
+             
+             # set a semi-transparent edge color 
+             edge.col= as.color('grey', opacity= 0.04),
+             # set the vertex size
+             vertex.cex=0.8,
+             # set a semi transparent vertex color
+             vertex.col=pal7[main_partit+1] ,
+             vertex.border=NA,
+             # don't jitter the points around
+             jitter=FALSE
+             )
+
+title(main="Main network coloured by structurally equivalent clusters")
+
+#Add a legend to explain the maximum core membership that each colour represents
+# legend("topleft",
+#        legend=c(1:6),
+#        col = pal7[(2:7)],
+#        pch = 16,
+#        title = "Clusters")
+```
+
+
+Subset the network 6 times based on the 6 clusters
+```{r}
+main_cluster1<- main_statnet %s% which(main_partit ==1)
+main_cluster2<- main_statnet %s% which(main_partit ==2)
+main_cluster3<- main_statnet %s% which(main_partit ==3)
+main_cluster4<- main_statnet %s% which(main_partit ==4)
+main_cluster5<- main_statnet %s% which(main_partit ==5)
+main_cluster6<- main_statnet %s% which(main_partit ==6)
+```
+
+
+Plot clusters separetely:
+```{r}
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster1,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster1%v%'longitude',main_cluster1%v%'latitude'),  
+             
+             # set a semi-transparent edge color '#AA555555'
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster1%v%'degree')/100,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(1+1,(network.size(main_cluster1)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(1+1,(network.size(main_cluster1)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 1")
+
+###Cluster 2
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster2,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster2%v%'longitude',main_cluster2%v%'latitude'),  
+             
+             # set a semi-transparent edge color '#AA555555'
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster2%v%'degree')/100,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(2+1,(network.size(main_cluster2)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(2+1,(network.size(main_cluster2)))], opacity= 1),                      vertex.lty.width= 0.1,
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 2")
+
+###Cluster 3
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster3,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster3%v%'longitude',main_cluster3%v%'latitude'),  
+             
+             # set a semi-transparent edge color '#AA555555'
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster3%v%'degree')/100,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(3+1,(network.size(main_cluster3)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(3+1,(network.size(main_cluster3)))], opacity= 1),
+             vertex.lty.width= 0.1,
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 3")
+
+###Cluster 4
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster4,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster4%v%'longitude',main_cluster4%v%'latitude'),  
+             
+             # set a semi-transparent edge color '#AA555555'
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster4%v%'degree')/100,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(4+1,(network.size(main_cluster4)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(4+1,(network.size(main_cluster4)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 4")
+
+
+###Cluster 5
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster5,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster5%v%'longitude',main_cluster5%v%'latitude'),  
+             
+             # set a semi-transparent edge color '#AA555555'
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster5%v%'degree')/100,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(5+1,(network.size(main_cluster5)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(5+1,(network.size(main_cluster5)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 5")
+
+
+###Cluster 6
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster6,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster6%v%'longitude',main_cluster6%v%'latitude'),  
+             
+             # set a semi-transparent edge color '#AA555555'
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster6%v%'degree')/100,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(6+1,(network.size(main_cluster6)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(6+1,(network.size(main_cluster6)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 6")
+```
+
+
+
+Plot clusters separately with the vertex size representing the real degree of the vertex:
+```{r}
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster1,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordinates from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster1%v%'longitude',main_cluster1%v%'latitude'),  
+             # set a semi-transparent edge color
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster1%v%'wdegree')/200,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(1+1,(network.size(main_cluster1)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(1+1,(network.size(main_cluster1)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 1")
+
+###Cluster 2
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster2,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster2%v%'longitude',main_cluster2%v%'latitude'),  
+             # set a semi-transparent edge color 
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster2%v%'wdegree')/200,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(2+1,(network.size(main_cluster2)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(2+1,(network.size(main_cluster2)))], opacity= 1),                      vertex.lty.width= 0.1,
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 2")
+
+###Cluster 3
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster3,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster3%v%'longitude',main_cluster3%v%'latitude'),  
+             # set a semi-transparent edge color 
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster3%v%'wdegree')/200,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(3+1,(network.size(main_cluster3)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(3+1,(network.size(main_cluster3)))], opacity= 1),
+             vertex.lty.width= 0.1,
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 3")
+
+###Cluster 4
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster4,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster4%v%'longitude',main_cluster4%v%'latitude'),  
+             # set a semi-transparent edge color 
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster4%v%'wdegree')/200,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(4+1,(network.size(main_cluster4)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(4+1,(network.size(main_cluster4)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 4")
+
+
+###Cluster 5
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster5,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster5%v%'longitude',main_cluster5%v%'latitude'),  
+             # set a semi-transparent edge color 
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster5%v%'wdegree')/200,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(5+1,(network.size(main_cluster5)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(5+1,(network.size(main_cluster5)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 5")
+
+
+###Cluster 6
+# plot the map for the background
+map(database= 'world',  region =europe, fill=TRUE,col='#f2f2f2',border ='grey',lwd=0.08)
+
+# plot the network using the geo coordinates
+plot.network(main_cluster6,  # pass in the network
+             # don't erase the map before drawing the network
+             new=FALSE, 
+             # get coordiantes from vertices and pass in as 2-col matrix
+             coord=cbind(main_cluster6%v%'longitude',main_cluster6%v%'latitude'),  
+             # set a semi-transparent edge color 
+             edge.col= as.color('grey', opacity= 0),
+             # set the vertex size
+             vertex.cex = (main_cluster6%v%'wdegree')/200,
+             # set a semi transparent vertex color
+             vertex.col= as.color(pal7[rep(6+1,(network.size(main_cluster6)))], opacity= 0.6) ,
+             vertex.border=as.color(pal7[rep(6+1,(network.size(main_cluster6)))], opacity= 1),
+             # don't jitter the points around
+             jitter=FALSE
+             )
+title(main="Cluster 6")
+```
+
+Detach packages that will not be needed any more:
+```{r}
+detach(package:intergraph)
+detach(package:maps)
+detach(package:sna)
+```
+
+
+
+
+# Question 5
+
+Call libraries that are needed for this question:
+```{r}
+require(igraph) 
+```
+
+
+Store the estimated coefficients and their standard errors given in the instructions in a vector:
+```{r}
+#Estimated Coefficients
+coef<- c(0.3329028, 0.3895257, 0.0870115, -0.0016359, 0.5420552, 0.2099600, 2.5899157, 0.5478822)
+
+#Standard Errors
+ste<- c(0.0578418, 0.0419288, 0.0415069, 0.0002128, 0.0829627, 0.0416916, 0.0657558, 0.0204300)
+```
+
+
+Calculate the Odd Ratios for each coefficient by exponentiating the logit that was produced by the ERGM. Calculate also the Lower and Upper limits of their Confidence Intervals. Print a table with the results:
+```{r}
+or<- exp(coef) #Calculate the Odds Ratios
+lci <- exp(coef-1.96*ste) # the lower confidence intervals for 95% confidence
+uci <- exp(coef+1.96*ste) # the upper confidence intervals for 95% confidence
+
+oddsratios <- cbind(round(lci, digits = 4), round(or,digits = 4), round(uci,digits = 4)) ## sticking these vectors together, rounding each to 4 decimal places
+
+colnames(oddsratios) <- c("Lower CI","Odds Ratios","Upper CI")
+rownames(oddsratios)<- c("nodeifactor.region.Eastern Europe", "nodeifactor.region.Southern Europe", "nodeifactor.region.Western Europe", "nodeicov.rank_ranked", "nodeicov.staff_scaled", "nodeicov.POI_scaled", "mutual", "gwesp.fixed.0.8")
+
+oddsratios
+
+```
+
+
+
+Calculate assortativity for all the vertex attributes available in the metadata file, to facilitate the decision on the additional terms in the ergm:
+```{r}
+meta_names<- colnames(hei_metadata) #store column names of the metadata files. 
+meta_types<-as.matrix(sapply(hei_metadata, class))#store the type of the columns, so that we can treat differently characters from numeric
+
+#Initialize the data frame to store the assortativity values
+assortativities_df<- data.frame(meta_names)
+assortativities_df['Assortativity'] <- NA
+
+#A loop that goes through all the columns of the metadata file, makes them vertex attribute and calculates the assortativity based on each of them
+for(i in 1:length(meta_names)) 
+  {
+  if(i==4) next #exclude ther GRID_ID column
+  meta_name<- meta_names[i] #create a variable that holds only one of the names of the columns to process in one iteration
+  
+  #Treat character columns by using the assortativity.nominal
+  if (meta_types[i]=="character"){
+    reduced_net <- set.vertex.attribute(reduced_net,name= meta_name, index =V(reduced_net), hei_metadata[,i][hei_metadata$Erasmus.ID  %in% V(reduced_net)$name])
+      
+    assort <- assortativity.nominal(reduced_net,factor(vertex_attr(graph=reduced_net, name=meta_name, index = V(reduced_net))), directed = TRUE)
+    
+    #Treat numeric columns: 
+    # - impute the NA values with the maximum value of each column + 1. This is an assumption and we should keep in mind that this imputation might not represent the reality.
+    # - calculate assortativity using assortativity function
+  }  else {
+
+    max_value<- max(hei_metadata[,meta_name], na.rm = TRUE)#store the maximum value of the column
+hei_metadata[is.na(hei_metadata[,meta_name]),meta_name]<- max_value +1#replace the NAs with the maximum value + 1
+    
+reduced_net <- set.vertex.attribute(reduced_net,name= meta_name, index =V(reduced_net), hei_metadata[,i][hei_metadata$Erasmus.ID  %in% V(reduced_net)$name])#create the vertex attribute
+
+    assort <- assortativity(reduced_net,vertex_attr(graph=reduced_net, name=meta_name, index = V(reduced_net)), directed = TRUE) #calculate the assortativity
+    
+  }
+    assortativities_df[i,2]<-assort #store the assortativity value that was calculated to the dataframe that was initially created.
+    reduced_net<- delete_vertex_attr(reduced_net, meta_name)#delete the vertex attribute that was calculated, so that we keep the reduced_net clean
+}#end of loop
+
+#order the assortativity table
+order_assortativities_df <-assortativities_df[order(assortativities_df$Assortativity),]
+
+head(order_assortativities_df) #Print the attributes with the lowest assortativity, hence with the highest DISASSORTATIVITY (since it is negative)
+tail(order_assortativities_df) #Print the attributes with the highest ASSORTATIVITY
+```

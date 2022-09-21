@@ -1,0 +1,1235 @@
+---
+title: "MY459-30499"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = FALSE}
+library("quanteda", quietly = TRUE, warn.conflicts = FALSE, verbose = FALSE)
+library(quanteda.textstats)
+library(quanteda.textplots)
+library(quanteda.textmodels)
+library(glmnet)
+```
+
+# Create the sample
+
+
+```{r}
+sarc <- read.csv("train-balanced-sarcasm.csv")
+```
+
+```{r}
+set.seed(123)
+
+nrow(sarc)
+
+#Split the dataset into the sarcastic and non-sarcastic comments. I will process them separetely and then merge them , so that I create at the end a balanced dataset
+sarc1<- sarc[sarc$label ==1, ]
+sarc0<- sarc[sarc$label ==0, ]
+nrow(sarc1)
+nrow(sarc0)
+
+#Draw 2000 random numbers to use tham as indexes in order to select a random sample from the big dataset
+sample1_indices <- sample(1:nrow(sarc1), 2000)
+sample0_indices <- sample(1:nrow(sarc0), 2000)
+
+#Get a sample for sarcastic and non-sarcastic records equivalently
+sarc1<- sarc1[sample1_indices,]
+sarc0<- sarc0[sample0_indices,]
+
+#Combine the sarcastic and non-sarcastic records
+sarc_df<- rbind(sarc1, sarc0)
+
+#Shuffle the data frame so that sarcastic and non-sarcastic comments are randomly stored
+shuffle_ind<- sample(1:4000, 4000)
+sarc_df<- sarc_df[shuffle_ind,]
+
+#set the row names to be sequential numbers from 1 to 4000
+rownames(sarc_df)<- 1:4000
+head(sarc_df)
+```
+
+```{r}
+#Remove null records
+test1<- na.omit(sarc_df)
+nrow(test1)
+#There are no null values
+```
+
+
+# Create the corpus and any document feture matrix that will be needed for the analysis further on:
+
+```{r}
+table(sarc_df$label) #it is a balanced dataset
+
+#Add label as a factor:
+sarc_df$label_f <- factor(sarc_df$label)
+
+#Create a corpus where each comment is a document and add the rest of the variables, except the parent comment, as document variables
+sarc_corpus <- corpus(sarc_df$comment, docvars=sarc_df[,3:9])
+docvars(sarc_corpus)$label <-sarc_df$label
+docvars(sarc_corpus)$label_f <-sarc_df$label_f
+
+#Create 2 different corpora based on whether the comments were or were not sarcastic 
+sarc_corpus_0<- sarc_corpus[docvars(sarc_corpus)$label==0]
+sarc_corpus_1<- sarc_corpus[docvars(sarc_corpus)$label==1]
+
+#Create tokens of words for the comments 
+#what="word", remove_punct = FALSE are the defaults
+sarc_word_toks_0<- tokens(sarc_corpus_0)
+sarc_word_toks_1<- tokens(sarc_corpus_1)
+```
+
+
+
+We see a lot of common words in both and most of them we would consider as stopwords, hence we will remove them and recreate the dfm. We also use stems:
+```{r}
+#With punctuation
+#Create dfm for each class, with stopwords and other features removed:
+toks_filtered_punct_0 <- sarc_corpus_0 %>%
+      tokens(remove_numbers = TRUE, remove_url= TRUE, remove_symbols = TRUE) %>%
+      tokens_remove(stopwords("en")) %>%
+      tokens_wordstem() 
+dfm_0_punct_noprop <- toks_filtered_punct_0 %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)
+dfm_punct_0<- dfm_weight(dfm_0_punct_noprop,scheme = "prop")
+
+
+toks_filtered_punct_1 <- sarc_corpus_1 %>%
+      tokens(remove_numbers = TRUE, remove_url= TRUE, remove_symbols = TRUE) %>%
+      tokens_remove(stopwords("en")) %>%
+      tokens_wordstem() 
+dfm_1_punct_noprop <- toks_filtered_punct_1 %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)
+dfm_punct_1<- dfm_weight(dfm_1_punct_noprop,scheme = "prop")
+
+
+cat('\n  These are the most common words of the non-sarcastic comments: \n\n ')
+topfeatures(dfm_punct_0, n = 25, scheme = "count")#total feature frequency across alll documents
+topfeatures(dfm_punct_0, n = 25, scheme = "docfreq")#number of documents that each feature appeared at least once
+cat('\n\n  These are the most common words of the sarcastic comments: \n\n ')
+topfeatures(dfm_punct_1, n = 25)
+topfeatures(dfm_punct_1, n = 25, scheme = "docfreq")
+```
+```{r}
+#Without punctuation
+#Create dfm for each class, with stopwords and other features removed:
+toks_filtered_0 <- sarc_corpus_0 %>%
+      tokens(remove_punct=TRUE, remove_numbers = TRUE, remove_url= TRUE, remove_symbols = TRUE) %>%
+      tokens_remove(stopwords("en")) %>%
+      tokens_wordstem() 
+dfm_0_noprop <- toks_filtered_0 %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)
+dfm_0<- dfm_weight(dfm_0_noprop,scheme = "prop")
+
+
+toks_filtered_1 <- sarc_corpus_1 %>%
+      tokens(remove_punct=TRUE,remove_numbers = TRUE, remove_url= TRUE, remove_symbols = TRUE) %>%
+      tokens_remove(stopwords("en")) %>%
+      tokens_wordstem() 
+dfm_1_noprop <- toks_filtered_1 %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)
+dfm_1<- dfm_weight(dfm_1_noprop,scheme = "prop")
+
+
+cat('\n  These are the most common words of the non-sarcastic comments: \n\n ')
+topfeatures(dfm_0, n = 25, scheme = "count")#total feature frequency across alll documents
+topfeatures(dfm_0, n = 25, scheme = "docfreq")#number of documents that each feature appeared at least once
+cat('\n\n  These are the most common words of the sarcastic comments: \n\n ')
+topfeatures(dfm_1, n = 25)
+topfeatures(dfm_1, n = 25, scheme = "docfreq")
+```
+
+### All comments corpus-token-dfm
+```{r}
+# tokenizing and creating DFM
+toks <- sarc_corpus %>%
+      tokens(remove_punct=TRUE, remove_numbers = TRUE, remove_url= TRUE, remove_symbols = TRUE) %>%
+      tokens_remove(stopwords("en")) %>%
+      tokens_wordstem() 
+
+sarc_dfm_noprop <- toks %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)
+  
+sarc_dfm<- dfm_weight(sarc_dfm_noprop,scheme = "prop")
+```
+
+### All comments corpus-token-dfm with punctuation
+```{r}
+# tokenizing and creating DFM
+toks_punc <- sarc_corpus %>%
+      tokens(remove_numbers = TRUE, remove_url= TRUE, remove_symbols = TRUE) %>%
+      tokens_remove(stopwords("en")) %>%
+      tokens_wordstem() 
+
+```
+
+Create tokens and dfm that are monograms and bigrams.
+```{r}
+toks_bg <- tokens_ngrams(toks, n=1:2)#tokens can be singles or bi-grams
+
+sarc_bg_dfm <- toks_bg %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)%>%
+            dfm_weight(scheme = "prop")
+
+sarc_bg_dfm[1:5,1:10]
+```
+
+### Parent comments:
+
+```{r}
+#Create a corpus where each parent comment is a document and add the rest of the variables, except the comment, as document variables
+par_corpus <- corpus(sarc_df$parent_comment, docvars=sarc_df[,3:9])
+docvars(par_corpus)$label <-sarc_df$label
+```
+
+```{r}
+# tokenizing and creating DFM
+par_toks <- par_corpus %>%
+      tokens(remove_punct = TRUE, remove_numbers = TRUE, remove_url= TRUE, remove_symbols = TRUE) %>%
+      tokens_remove(stopwords("en")) %>%
+      tokens_wordstem() 
+
+par_dfm_noprop <- par_toks %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)
+  
+par_dfm<- dfm_weight(par_dfm_noprop,scheme = "prop")
+
+```
+
+
+Create tokens and dfm that are monograms and bigrams.
+```{r}
+par_toks_bg <- tokens_ngrams(par_toks, n=1:2)#tokens can be singles or bi-grams
+
+par_bg_dfm <- par_toks_bg %>%
+            dfm() %>%
+            dfm_trim(min_docfreq = 3)%>%
+            dfm_weight(scheme = "prop")
+```
+
+
+
+
+# ------------------------------------------------------------------------
+# Exploratory Data Analysis
+
+```{r}
+table(sarc_df$label) #it is a balanced dataset
+```
+
+#### EDA - Corpus distribution of numeric variables
+```{r}
+#Score
+par(mfrow=c(1,2))
+#Plot the distribution of label =0 
+hist(sarc_df[sarc_df$label==1,]$score,  xlab="Score of comments", ylab="Frequencies", freq= FALSE, breaks =50, main="Sarcastic comments", xlim=c(min(sarc_df$score),max(sarc_df$score)))
+abline(v=median(sarc_df[sarc_df$label==1,]$score),col="red",lwd=0.2)
+
+hist(sarc_df[sarc_df$label==0,]$score,  xlab="Score of comments", ylab="Frequencies", freq= FALSE, breaks =50, main="Non-Sarcastic comments",xlim=c(min(sarc_df$score),max(sarc_df$score)))
+abline(v=median(sarc_df[sarc_df$label==0,]$score),col="blue",lwd=0.2)
+
+
+
+#Ups
+par(mfrow=c(1,2))
+#Plot the distribution of label =0 
+hist(sarc_df[sarc_df$label==1,]$ups,  xlab="Ups of comments", ylab="Frequencies", freq= FALSE, breaks =50, main="Sarcastic comments", xlim=c(min(sarc_df$ups),max(sarc_df$ups)))
+abline(v=median(sarc_df[sarc_df$label==1,]$ups),col="red",lwd=0.2)
+
+hist(sarc_df[sarc_df$label==0,]$ups,  xlab="Ups of comments", ylab="Frequencies", freq= FALSE, breaks =50, main="Non-Sarcastic comments",xlim=c(min(sarc_df$ups),max(sarc_df$ups)))
+abline(v=median(sarc_df[sarc_df$label==0,]$ups),col="blue",lwd=0.2)
+
+#Downs
+par(mfrow=c(1,2))
+#Plot the distribution of label =0 
+hist(sarc_df[sarc_df$label==1,]$downs,  xlab="Downs of comments", ylab="Frequencies", freq= FALSE, breaks =50, main="Sarcastic comments", xlim=c(min(sarc_df$downs),max(sarc_df$downs)))
+abline(v=median(sarc_df[sarc_df$label==1,]$downs),col="red",lwd=0.2)
+
+hist(sarc_df[sarc_df$label==0,]$downs,  xlab="Downs of comments", ylab="Frequencies", freq= FALSE, breaks =50, main="Non-Sarcastic comments",xlim=c(min(sarc_df$downs),max(sarc_df$downs)))
+abline(v=median(sarc_df[sarc_df$label==0,]$downs),col="blue",lwd=0.2)
+
+```
+
+
+#### Examine the relationship with other doc variables
+
+```{r}
+
+#docvars(sarc_corpus_1)
+cat('\n Descriptive statistics for score in the sarcastic comments: \n ')
+summary(sarc_corpus_1$score)
+cat('\n Descriptive statistics for score in the non-sarcastic comments: \n ')
+summary(sarc_corpus_0$score)
+
+
+cat('\n Descriptive statistics for ups in the sarcastic comments: \n ')
+summary(sarc_corpus_1$ups)
+cat('\n Descriptive statistics for ups in the non-sarcastic comments: \n ')
+summary(sarc_corpus_0$ups)
+
+
+cat('\n Descriptive statistics for downs in the sarcastic comments: \n ')
+summary(sarc_corpus_1$downs)
+cat('\n Descriptive statistics for downs in the non-sarcastic comments: \n ')
+summary(sarc_corpus_0$downs)
+
+#table(sarc_corpus_1$subreddit)
+```
+
+
+```{r}
+#Without punctuation
+textplot_wordcloud(dfm_0, max_words = 100, min_size = 0.5, max_size = 5)
+textplot_wordcloud(dfm_1, max_words = 100, min_size = 0.5, max_size = 5,color = "red")
+```
+
+```{r}
+#With punctuation
+textplot_wordcloud(dfm_punct_0, max_words = 100, min_size = 1, max_size = 20)
+textplot_wordcloud(dfm_punct_1, max_words = 100, min_size = 1, max_size = 20,color = "red")
+```
+
+```{r}
+#---- Are sarcastic comments longer than others?
+
+#count the number of tokens for each comment
+sarc_word_toks_0_cnt<- ntoken(sarc_word_toks_0)
+sarc_word_toks_1_cnt<- ntoken(sarc_word_toks_1)
+
+#----For label = 0 --------------------
+par(mfrow=c(1,2))
+#Plot the distribution of label =0 
+hist(sarc_word_toks_0_cnt,  xlab="Number of tokens", ylab="Frequencies", freq= FALSE, breaks =20, main="Non-sarcastic comments", xlim=c(0,max(sarc_word_toks_0_cnt, sarc_word_toks_1_cnt)))
+
+#Get descriptive statistics
+cat('\n  These are the descriptive statistics for the length of the non-sarcastic comments \n ')
+summary(sarc_word_toks_0_cnt)
+
+
+
+#----For label = 1 --------------------
+
+
+#Plot the distribution of label =0 
+hist(sarc_word_toks_1_cnt,  xlab="Number of tokens", ylab="Frequencies", freq= FALSE, breaks =40, main="Sarcastic comments",xlim=c(0,max(sarc_word_toks_0_cnt, sarc_word_toks_1_cnt)))
+
+#Get descriptive statistics
+cat('\n These are the descriptive statistics for the length of the sarcastic comments \n ')
+summary(sarc_word_toks_1_cnt)
+
+```
+
+
+```{r}
+#----- Do sarcastic comments contain more punctuation than the non-sarcastic ones?
+
+
+#Count the number of punctuations used in every comment
+punctuation_0_cnt<- sarc_word_toks_0_cnt - ntoken(tokens(sarc_corpus_0, remove_punct = TRUE))
+punctuation_1_cnt<- sarc_word_toks_1_cnt - ntoken(tokens(sarc_corpus_1, remove_punct = TRUE))
+
+#----For non-sarcastic comments
+
+#Plot the distribution of non-sarcastic comments
+par(mfrow=c(1,2))
+hist(punctuation_0_cnt,  xlab="Number of punctuations", ylab="Frequencies", freq= FALSE,breaks =50, main="Non-sarcastic comments",xlim=c(0,max(punctuation_1_cnt, punctuation_0_cnt)))
+
+#Get descriptive statistics
+cat('\n These are the descriptive statistics for the number of punctuations in the non-sarcastic comments \n')
+summary(punctuation_0_cnt)
+
+
+#----For sarcastic comments
+
+#Plot the distribution of sarcastic comments
+hist(punctuation_1_cnt,  xlab="Number of punctuations", ylab="Frequencies", freq= FALSE,   breaks =40, main="Sarcastic comments",xlim=c(0,max(punctuation_1_cnt, punctuation_0_cnt)))
+
+#Get descriptive statistics
+cat('\n These are the descriptive statistics for the number of punctuations in the sarcastic comments\n')
+summary(punctuation_1_cnt)
+```
+
+
+```{r}
+#----- Does the text in the sarcastic comments have higher levels of complexity (lexical diversity and readability scores)?
+
+#Since now we are not talking about length but about lexical diversity, I will remove stopwords from the analysis.
+
+#------- For non-sarcastic comments  --------------------------------
+toks_0 <- tokens_remove(sarc_word_toks_0, stopwords("english"))
+dfm_0 <- dfm(toks_0)
+
+# variations of TTR
+tstat_lexdiv_0 <- textstat_lexdiv(dfm_0,measure="TTR")
+
+#Get descriptive statistics
+cat('\n Descriptive statistics of Lexical Diversity TTR measures for the non-sarcastic comments: \n ')
+summary(tstat_lexdiv_0)
+
+#-------- For sarcastic comments  --------------------------------
+toks_1 <- tokens_remove(sarc_word_toks_1, stopwords("english"))
+dfm_1 <- dfm(toks_1)
+
+# variations of TTR
+tstat_lexdiv_1 <- textstat_lexdiv(dfm_1,measure="TTR")
+
+
+#Get descriptive statistics
+cat('\n Descriptive statistics of Lexical Diversity TTR measures for the sarcastic comments: \n ')
+summary(tstat_lexdiv_1)
+```
+
+
+```{r}
+#Readability
+
+#-------For non-sarcastic comments --------------------------------
+stat_read_0 <- textstat_readability(sarc_corpus_0,
+                     measure = "Flesch.Kincaid")
+
+#Get descriptive statistics
+cat('\n Descriptive statistics for readability measure in the non-sarcastic comments: \n ')
+summary(stat_read_0)
+
+
+
+#------- For sarcastic comments  --------------------------------
+stat_read_1 <- textstat_readability(sarc_corpus_1,
+                     measure = "Flesch.Kincaid")
+
+#Get descriptive statistics
+cat('\n Descriptive statistics for readability measure in the sarcastic comments: \n ')
+summary(stat_read_1)
+```
+
+
+```{r}
+#Test for independence between sarcasm and other metrics of the corpus
+chisq.test(sarc_df$label, ntoken(toks))
+chisq.test(sarc_df$label, ntoken(toks)-ntoken(toks_punc))
+chisq.test(sarc_df$label, sarc_df$score)
+chisq.test(sarc_df$label, sarc_df$ups)
+chisq.test(sarc_df$label, sarc_df$downs)
+
+```
+
+
+# -----------------------------------------------------
+# Dictionaries
+
+```{r}
+library(quanteda.dictionaries)
+```
+
+### Is there a correlations with the sentiment and the sarcasm?
+### Is there a correlation with the moral and the sarcasm?
+
+Use the Moral Foundations Dictionary (`data_dictionary_MFD`) .
+
+```{r}
+#---------Sentiment of a comment:--------------------
+
+#I will use the LexiCoder, which is built for media text and not for social media text, since Reddit comments are more similar to that. The authors in the paper have used the LIWC, but this is not an open source dictionary.
+
+data(data_dictionary_LSD2015)
+summary(data_dictionary_LSD2015)
+
+
+#In this steps we are using monograms, hence the last 2 categories of the dictionary will not be used.
+
+
+#Group the documents so that one group is for the ones that were sarcastic and the other for the ones that were not.
+sarc_dfm_grp<- dfm_group(sarc_dfm_noprop, groups = label)
+
+#Apply the sentiment dictionary to the dfm
+sarc_dfm_sent <- dfm_lookup(sarc_dfm_grp, data_dictionary_LSD2015, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+sarc_dfm_sent <- dfm_weight(sarc_dfm_sent, scheme = "prop")
+
+#Print the results of the columns of interest
+#I only use the first 2 since I have only created uni-gram tokens
+sarc_dfm_sent[,0:2]
+```
+
+
+```{r}
+#---------Moral of a comment (Virtue or Vice):--------------------
+
+#summary(data_dictionary_MFD) # This was used to look into the categories
+
+# Aggregate the ten categories into 2 (virtue and vice). I generate a new dictionary.
+moralDict <- dictionary(list(virtue = c(data_dictionary_MFD$care.virtue,
+                                          data_dictionary_MFD$fairness.virtue,
+                                        data_dictionary_MFD$loyalty.virtue,
+                                        data_dictionary_MFD$authority.virtue,
+                                        data_dictionary_MFD$sanctity.virtue),
+                             
+                             vice =c(data_dictionary_MFD$care.vice,
+                                     data_dictionary_MFD$fairness.vice,
+                                     data_dictionary_MFD$loyalty.vice,
+                                     data_dictionary_MFD$authority.vice,
+                                     data_dictionary_MFD$sanctity.vice)))
+
+
+#Apply the sentiment dictionary to the dfm
+sarc_dfm_moral2 <- dfm_lookup(sarc_dfm_grp, moralDict, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+sarc_dfm_moral2 <- dfm_weight(sarc_dfm_moral2, scheme = "prop")
+
+#Print the results of the columns of interest
+sarc_dfm_moral2
+
+```
+
+
+```{r}
+#---------Moral of a comment (all categories):--------------------
+
+#Apply the moral dictionary to the dfm
+sarc_dfm_moral <- dfm_lookup(sarc_dfm_grp, data_dictionary_MFD, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+sarc_dfm_moral <- dfm_weight(sarc_dfm_moral, scheme = "prop")
+
+#Print the results of the columns of interest
+sarc_dfm_moral
+
+```
+
+#### non-grouped for the comment
+
+```{r}
+#---------Sentiment of a parent comment:--------------------
+#Apply the sentiment dictionary to the dfm
+sarc_dfm_sent <- dfm_lookup(sarc_dfm_noprop, data_dictionary_LSD2015, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+sarc_dfm_sent <- dfm_weight(sarc_dfm_sent, scheme = "prop")
+
+#Print the results of the columns of interest
+#I only use the first 2 since I have only created uni-gram tokens
+sarc_dfm_sent[,0:2]
+```
+
+
+```{r}
+#---------Moral of a comment (all categories):--------------------
+
+#Apply the moral dictionary to the dfm
+sarc_dfm_moral <- dfm_lookup(sarc_dfm_noprop, data_dictionary_MFD, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+sarc_dfm_moral <- dfm_weight(sarc_dfm_moral, scheme = "prop")
+
+#Print the results of the columns of interest
+sarc_dfm_moral
+
+```
+
+#### Create dictionary dfms for the parent-comment
+
+```{r}
+#---------Sentiment of a parent comment:--------------------
+
+#Group the documents so that one group is for the ones that were sarcastic and the other for the ones that were not.
+par_dfm_grp<- dfm_group(par_dfm_noprop, groups = label)
+
+#Apply the sentiment dictionary to the dfm
+par_dfm_sent <- dfm_lookup(par_dfm_grp, data_dictionary_LSD2015, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+par_dfm_sent <- dfm_weight(par_dfm_sent, scheme = "prop")
+
+#Print the results of the columns of interest
+#I only use the first 2 since I have only created uni-gram tokens
+par_dfm_sent[,0:2]
+```
+
+
+```{r}
+#---------Moral of a parent comment (all categories):--------------------
+
+#Apply the moral dictionary to the dfm
+sarc_dfm_moral2 <- dfm_lookup(par_dfm_grp, data_dictionary_MFD, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+sarc_dfm_moral2 <- dfm_weight(sarc_dfm_moral2, scheme = "prop")
+
+#Print the results of the columns of interest
+sarc_dfm_moral2
+```
+
+
+#### Non-grouped:
+```{r}
+#---------Sentiment of a parent comment:--------------------
+#Apply the sentiment dictionary to the dfm
+par_dfm_sent <- dfm_lookup(par_dfm_noprop, data_dictionary_LSD2015, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the documents is indifferent
+par_dfm_sent <- dfm_weight(par_dfm_sent, scheme = "prop")
+
+#Print the results of the columns of interest
+#I only use the first 2 since I have only created uni-gram tokens
+par_dfm_sent[,0:2]
+```
+
+```{r}
+#---------Moral of a parent comment (all categories):--------------------
+
+#Apply the moral dictionary to the dfm
+par_dfm_moral <- dfm_lookup(par_dfm_noprop, data_dictionary_MFD, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+par_dfm_moral <- dfm_weight(par_dfm_moral, scheme = "prop")
+
+#Print the results of the columns of interest
+par_dfm_moral
+```
+
+#### Calculate distance between parent and comment regarding morality
+
+Compute a metric of distance between parent comment and comment. Do this for each row of the dataset and calculate cosine similarity.
+
+```{r}
+
+#initialize the distance numeric vector
+distance<- vector('numeric',length(toks))
+
+#process each record separately
+for (i in sequence(length(toks))){  
+  #create a weighted dfm of the post
+  par_dfm_tmp<- par_dfm_moral[i,] 
+  
+  #create a weighted dfm of the comment
+  sarc_dfm_tmp<- sarc_dfm_moral[i,]
+  
+  #calculate cosine similarity and reduce it from 1 in order to get the distance
+  distance[i] <-1 - sum(par_dfm_tmp * sarc_dfm_tmp) / ( sqrt(sum(par_dfm_tmp^2)) *  sqrt(sum(sarc_dfm_tmp^2)) )
+}
+
+```
+
+
+```{r}
+#Create a dataframe with distance and label
+
+distance_label_df<- data.frame(distance, sarc_df$label)
+colnames(distance_label_df)<- c('distance', 'label')
+
+#Seperate them on label = 0 and label = 1
+distance_0<- distance_label_df[distance_label_df$label ==0,1]
+distance_1<- distance_label_df[distance_label_df$label ==1,1]
+
+#----For label = 0
+par(mfrow=c(1,2))
+#Plot the distribution of delta =0
+hist(distance_0,  xlab="Moral distance", ylab="Frequencies", freq= FALSE, breaks =10, main="Non-sarcastic comments", ylim=c(0,7))
+#ylim = c(0, 0.014), xlim= c(0,700), breaks =10
+#Get descriptive statistics
+cat('\n Descriptive statistics for the moral distance between parent-comment and non-sarcastic comment\n')
+summary(distance_0)
+
+
+#----For label = 1
+#Plot the distribution of delta =1
+hist(distance_1,  xlab="Moral distance", ylab="Frequencies", freq= FALSE, breaks =10,main="Sarcastic comments",ylim=c(0,7))
+
+#Get descriptive statistics
+cat('\n Descriptive statistics for the moral distance between parent-comment and sarcastic comment\n')
+summary(distance_1)
+
+
+```
+
+
+#### Is there a correlation between how moral a parent-comment is and how sarcastic the answer will be?
+
+```{r}
+#---------Moral (virtue or vice) of a parent comment:--------------------
+#Group the documents so that one group is for the ones that were persuaded and the other for the ones that were not.
+par_dfm_grp<- dfm_group(par_dfm_noprop, groups = label)
+
+#Apply the sentiment dictionary to the dfm
+par_dfm_grp <- dfm_lookup(par_dfm_grp, moralDict, verbose = TRUE)
+
+#Transform it to proportions, so that the magnitude of the 2 documents is indifferent
+par_dfm_grp <- dfm_weight(par_dfm_grp, scheme = "prop")
+
+#Print the results of the columns of interest
+par_dfm_grp
+
+```
+
+# -----------------------------------------------------
+# Supervised Learning
+
+
+## Naive Bayes
+
+The code here illustrates how we can use supervised machine learning to predict categories for unseen documents based on a set of labeled documents.
+
+We take an 80% random sample of comments as training set and the rest as test set, which we will use to compute the performance of our model. We will then create a document-feature-matrix where each variable is a word.
+
+```{r}
+# shuffling to split into training and test set
+smp <- sample(c("train", "test"), size=ndoc(sarc_corpus), 
+                prob=c(0.80, 0.20), replace=TRUE)
+train <- which(smp=="train")
+test <- which(smp=="test")
+```
+
+Train a Naive Bayes model:
+
+```{r}
+# training Naive Bayes model
+nb <- textmodel_nb(sarc_dfm[train,], docvars(sarc_corpus, "label")[train])
+# predicting labels for test set
+preds <- predict(nb, newdata = sarc_dfm[test,])
+
+# computing the confusion matrix
+cm <- table(preds, docvars(sarc_corpus, "label")[test])#compares training vs test
+
+```
+ We compute precision, recall, and accuracy to quantify how well the Naive Bayes model performed.
+
+```{r}
+# function to compute performance metrics
+precrecall <- function(mytable, verbose=TRUE) {
+    truePositives <- mytable[1,1]
+    falsePositives <- sum(mytable[1,]) - truePositives
+    falseNegatives <- sum(mytable[,1]) - truePositives
+    precision <- truePositives / (truePositives + falsePositives)
+    recall <- truePositives / (truePositives + falseNegatives)
+    if (verbose) {
+        print(mytable)
+        cat("\n precision =", round(precision, 2), 
+            "\n    recall =", round(recall, 2), "\n")
+    }
+    invisible(c(precision, recall))
+}
+```
+
+```{r}
+#Reverse the index of the confusion matrix 'cm' aso that the positive class to predict is the label=1
+cm_rev <- cm[2:1,2:1]
+cm_rev
+
+cat('\n')
+# precision and recall
+p_r<-precrecall(cm_rev, verbose = FALSE)
+cat("precision =", round(p_r[1], 2), 
+            "\nrecall =", round(p_r[2], 2), "\n")
+
+#F1 score
+f1<- (2*(p_r[1]*p_r[2]))/(p_r[1]+p_r[2])
+cat("F1 score =", round(f1,2), "\n")
+
+#accuracy
+cat('accuracy =', round(sum(diag(cm_rev)) / sum(cm_rev),2))
+```
+
+
+What if we try with word n-grams up to bigrams instead of unigrams?
+
+```{r}
+
+# Naive Bayes model
+nb <- textmodel_nb(sarc_bg_dfm[train,], docvars(sarc_corpus, "label")[train])
+preds <- predict(nb, newdata = sarc_bg_dfm[test,])
+
+#performance
+cm <- table(preds, docvars(sarc_corpus, "label")[test])
+cm_rev <- cm[2:1,2:1]
+cm_rev
+
+cat('\n')
+# precision and recall
+p_r<-precrecall(cm_rev, verbose = FALSE)
+cat("precision =", round(p_r[1], 2), 
+            "\nrecall =", round(p_r[2], 2), "\n")
+#F1 score
+f1<- (2*(p_r[1]*p_r[2]))/(p_r[1]+p_r[2])
+cat("F1 score =", round(f1,2), "\n")
+
+#accuracy
+cat('accuracy =', round(sum(diag(cm_rev)) / sum(cm_rev),2))
+
+```
+
+ We dig a bit more into the model by extracting the posterior class probabilities for words than in the worcloud came up as frequent ones in one of the 2 categories.
+```{r}
+# extracting posterior word probabilities
+get_posterior <- function(nb) {
+  PwGc <- nb$param #prob of the word Given class
+  Pc <- nb$priors #prob of the class
+  PcGw <- PwGc * base::outer(Pc, rep(1, ncol(PwGc)))
+  PcGw <- matrix(sapply(PcGw, function(x) sqrt(sum(x^2))), nrow=2, dimnames = dimnames(PwGc)) #prob of the class (of the doc) given the word
+  names(dimnames(PcGw))[1] <- names(dimnames(PwGc))[1] <- "classes"
+  PcGw 
+}
+probs <- get_posterior(nb)
+probs[,c("forgot", "yeah", "good", "thank")]
+#To do: get the ones with the highest prob
+
+```
+
+Lasso regression. The number of features will change depending on the value of the penalty parameter.
+
+```{r}
+# now with lasso
+lasso <- cv.glmnet(x=sarc_bg_dfm[train,], y=docvars(sarc_corpus, "label")[train],
+                   alpha=1, nfolds=5, family="binomial")
+plot(lasso)
+
+pred <- predict(lasso, sarc_bg_dfm[test,], type="class")
+
+#performance
+cm <- table(pred, docvars(sarc_corpus, "label")[test])
+cm_rev <- cm[2:1,2:1]
+cm_rev
+cat('\n')
+# precision and recall
+p_r<-precrecall(cm_rev, verbose = FALSE)
+cat("precision =", round(p_r[1], 2), 
+            "\nrecall =", round(p_r[2], 2), "\n")
+#F1 score
+f1<- (2*(p_r[1]*p_r[2]))/(p_r[1]+p_r[2])
+cat("F1 score =", round(f1,2), "\n")
+
+#accuracy
+cat('accuracy =', round(sum(diag(cm_rev)) / sum(cm_rev),2))
+
+# extracting coefficients
+best.lambda <- which(lasso$lambda==lasso$lambda.1se)
+beta <- lasso$glmnet.fit$beta[,best.lambda]
+
+length(beta)#The number of features when training the model
+sum(beta!=0)#The number of features selected from the model.
+best.lambda#best lambda
+
+## identifying predictive features
+df <- data.frame(coef = as.numeric(beta),
+                ngram = names(beta), stringsAsFactors=F)
+
+# note that some features become 0
+table(df$coef==0)
+
+df <- df[order(df$coef),]
+head(df[,c("coef", "ngram")], n=10)
+tail(df[,c("coef", "ngram")], n=10)
+```
+
+
+For the words that came up as the most significant ones from the previous model, I search them in their content. I print only 5 comments.
+```{r}
+kwic(toks_bg, "yeah", window =10)[1:5,]
+
+#To do: get the actual label next to the kwic df
+#cbind(k,toks_bg$label)
+```
+
+# --------------------------------------------------------
+# Disimilarity metric
+#### Are comments different from their parent-comments less likely to be sarcastic?
+
+Calculate distance between parent and comment.
+
+Compute a metric of distance between parent comment and comment. Do this for each row of the dataset and calculate cosine similarity.
+
+```{r}
+
+#initialize the distance numeric vector
+distance<- vector('numeric',length(toks))
+
+
+#process each record separately
+for (i in sequence(length(toks))){  
+  #create a weighted dfm of the post
+  par_dfm_tmp<- par_dfm[i,] 
+  
+  #create a weighted dfm of the comment
+  sarc_dfm_tmp<- sarc_dfm[i,]
+  
+  #get the posts dfm that also includes features from the comment dfm
+  par_dfm_full<- dfm_match(par_dfm_tmp,union(featnames(par_dfm_tmp), featnames(sarc_dfm_tmp)))
+  
+  #get the comments dfm that also includes features from the posts dfm  
+  sarc_dfm_full<- dfm_match(sarc_dfm_tmp,union(featnames(par_dfm_tmp), featnames(sarc_dfm_tmp)))
+  
+  #calculate cosine similarity and reduce it from 1 in order to get the distance
+  distance[i] <-1 - sum(par_dfm_full * sarc_dfm_full) / ( sqrt(sum(par_dfm_full^2)) *  sqrt(sum(sarc_dfm_full^2)) )
+}
+
+```
+
+
+```{r}
+#Create a dataframe with distance and label
+
+distance_label_df<- data.frame(distance, sarc_df$label)
+colnames(distance_label_df)<- c('distance', 'label')
+
+#Seperate them on label = 0 and label = 1
+distance_0<- distance_label_df[distance_label_df$label ==0,1]
+distance_1<- distance_label_df[distance_label_df$label ==1,1]
+
+#----For label = 0
+par(mfrow=c(1,2))
+#Plot the distribution of delta =0
+hist(distance_0,  xlab="Distance", ylab="Frequencies", freq= FALSE, breaks =20, main="Non-sarcastic comments",  ylim=c(0,15))
+#ylim = c(0, 0.014), xlim= c(0,700), breaks =10
+#Get descriptive statistics
+cat('\n Descriptive statistics for the distance between parent-comment and non-sarcastic comment\n')
+summary(distance_0)
+
+
+#----For label = 1
+#Plot the distribution of delta =1
+hist(distance_1,  xlab="Distance", ylab="Frequencies", freq= FALSE, breaks =20,main="Sarcastic comments", ylim=c(0,15))
+
+#Get descriptive statistics
+cat('\n Descriptive statistics for the distance between parent-comment and sarcastic comment\n')
+summary(distance_1)
+
+
+```
+
+# ------------------------------------------------
+# Topic Modeling
+
+
+
+```{r}
+library("stm")
+library("tidyverse")
+library("zoo")
+library("topicmodels", quietly = TRUE, warn.conflicts = FALSE, verbose = FALSE)
+```
+
+Converting the `quanteda` object into an input for the structural topic model:
+
+```{r}
+stm_input <- convert(sarc_dfm_noprop, to = "stm")
+```
+
+In this first example, we will estimate a very simple model with only 3 topics. Note that if we do not supply any covariates, the `stm` package estimates a standard correlated topic model. Hence, we can also use `stm` for general topic modeling without additional covariates. Note that the "spectral" initialisation will always return the same model (differences can only result from varying numerical precision on different computers). For other initialisations, we could set a pseudo random number seed in order to obtain the same result again, this can be done with the `seed` option in the `stm` function.
+
+## Select the optimal number of topics (k)
+
+
+
+```{r, eval = FALSE}
+k_search_output <- searchK(stm_input$documents, stm_input$vocab,
+                           K = c(4,6,8,10,12), data = stm_input$meta,
+                           verbose = FALSE, heldout.seed = 123)
+plot(k_search_output)
+k_search_output
+
+```
+*held-out likelihood: the highest, the best. For an stm model, it measures how possible the new unseen data is. In other words, how much of a surprise the new data is for the model. The highest held-out likelihood is seen for k=10, hence for 10 topics.*
+
+*Residuals: the lowest the best. We see a linear decreasing pattern as the topics increase. Hence, the est k based on residuals is 12. *
+
+
+
+
+
+```{r}
+#k_search_output$results %>%
+#  select(K, exclus, semcoh) %>%
+#  unnest() %>%
+#  mutate(K = as.factor(K)) %>%
+ # ggplot(aes(semcoh, exclus, color = K)) +
+ # geom_point(size = 3, alpha = 0.7) +
+  #labs(x = "Semantic coherence",
+  #     y = "Exclusivity",
+   #    title = "Exclusivity and semantic coherence for different number of topics")
+
+
+```
+
+## Fitting a topic model with topic prevalence covariates
+
+
+We choose k=6. When estimating the topic model, we provide the label as topic prevalence covariate and do not specify any topic content covariates for now.
+
+```{r}
+stmodel <- stm(documents = stm_input$documents, vocab = stm_input$vocab,
+                     K = 6, prevalence =~ label_f ,
+               data = stm_input$meta, verbose = FALSE, init.type = "Spectral")
+
+#prevalence: there might be different topic shares in the thetas depending ont he party and the year
+
+plot(stmodel)
+```
+And individual word clouds for each topic. We can see the different structures.
+```{r}
+set.seed(123)
+cloud(stmodel, topic = 1, scale = c(2.5,.5))
+cloud(stmodel, topic = 2, scale = c(2.5,.5))
+cloud(stmodel, topic = 3, scale = c(2.5,.5))
+cloud(stmodel, topic = 4, scale = c(2.5,.5))
+cloud(stmodel, topic = 5, scale = c(2.5,.5))
+cloud(stmodel, topic = 6, scale = c(2.5,.5))
+```
+
+
+Let us now look into documents which have high shares of these topics and see whether the topic assignment makes sense. This can be done with the function `findThoughts`. We will look at only 2 examples to illustrate the functionality, but of course reading of more articles would be necessary for a careful analysis.
+
+```{r fig11, fig.height = 4, fig.width = 2}
+
+for (i in sequence(6)){
+  x<-findThoughts(stmodel,texts = sarc_df$comment[rowSums(sarc_dfm_noprop)>0],
+                                    n = 2, topics = i)$docs[[1]]
+  cat("\n Most representative documents for topic",i,": \n")
+  print(x)
+}
+
+```
+The prevalence covariate allow to see which topics are discussed more by which of the two groups: 
+
+```{r}
+effect_estimates <- estimateEffect(1:6 ~ label_f, stmodel, meta = stm_input$meta)
+```
+
+
+```{r}
+plot(effect_estimates, covariate = "label_f", topics = c(1, 2, 3, 4,5,6),
+     model = stmodel, method = "difference",
+     cov.value1 = "1", cov.value2 = "0",
+     xlab = "Sarcastic scale", 
+     main = "Sarcastic and non-sarcastic comments across topics",
+     xlim = c(-.1, .1), labeltype = "custom", 
+     #custom.labels = c("Topic1", "Topic2")
+     )
+```
+
+
+##  Fitting a topic model with topic prevalence and topic content covariates
+
+Next, we fit another structural topic model with both prevalence and topic content covariates. This allows to not just analyse how topic shares within documents vary cross different groups, but also how words in topics vary. The following will take a longer time to run than the previous model because of the additional covariate.
+
+
+```{r}
+stmodel_add <- stm(documents = stm_input$documents, vocab = stm_input$vocab,
+                     K = 6, prevalence =~ label_f  + s(score), content =~ label_f ,
+               data = stm_input$meta, verbose = FALSE, init.type = "Spectral")
+
+#prevalence: there might be different topic shares in the thetas depending ont he party and the year
+
+plot(stmodel_add)
+```
+```{r}
+set.seed(123)
+cloud(stmodel_add, topic = 1, scale = c(2.5,.5))
+cloud(stmodel_add, topic = 2, scale = c(2.5,.5))
+cloud(stmodel_add, topic = 3, scale = c(2.5,.5))
+cloud(stmodel_add, topic = 4, scale = c(2.5,.5))
+cloud(stmodel_add, topic = 5, scale = c(2.5,.5))
+cloud(stmodel_add, topic = 6, scale = c(2.5,.5))
+```
+
+
+```{r}
+effect_estimates <- estimateEffect(1:6 ~ label_f, stmodel_add, meta = stm_input$meta)
+```
+
+
+```{r}
+plot(effect_estimates, covariate = "label_f", topics = c(1, 2, 3, 4,5,6),
+     model = stmodel_add, method = "difference",
+     cov.value1 = "1", cov.value2 = "0",
+     xlab = "Sarcastic scale", 
+     main = "Sarcastic and non-sarcastic comments across topics",
+     xlim = c(-.1, .1), labeltype = "custom", 
+     #custom.labels = c("Topic1", "Topic2")
+     )
+```
+
+#LDA
+Deleting rows with zero observations and sorting the columns of the final dfm:
+
+```{r}
+sarc_dfm_nz <- sarc_dfm_noprop[rowSums(sarc_dfm_noprop) > 0,]
+
+sarc_dfm_nz <- sarc_dfm_nz[,sort(featnames(sarc_dfm_nz))]
+```
+
+Important: Deleting the associated rows also from the main dataframe, such that we can more easily go back and forth between dataframe and dfm later:
+
+```{r}
+sarc_df_nz <- sarc_df[as.numeric(str_replace(rownames(sarc_dfm_nz), pattern = "text", replace = "")),]
+
+```
+
+
+```{r}
+K <- 6
+lda <- LDA(sarc_dfm_nz, k = K, 
+                control = list(verbose=25L, seed = 123))
+```
+
+Look at the words most associated with each topic for a sample of topics. Put labels (on some) of the topics?
+
+```{r}
+top_terms <- terms(lda, 20)
+top_terms
+```
+
+
+Obtain the topic with the highest proportion for each of the comments. For topic 1 and 2 , sample 5 comments randomly that are predicted to contain that topic in highest proportion, and show that their semantic content (largely) reflects the topic you expected.
+
+```{r}
+# Topic 1
+cat("\n\n Topic 1, sarcastic comments: \n")
+top_topics <- topics(lda, 1)
+set.seed(123)
+sample(sarc_df_nz$comment[top_topics == 1 & sarc_df_nz$label==1], 5)
+
+cat("\n\n Topic 1, non-sarcastic comments: \n")
+top_topics <- topics(lda, 1)
+set.seed(123)
+sample(sarc_df_nz$comment[top_topics == 1 & sarc_df_nz$label==0], 5)
+
+
+cat("\n\n Topic 2, sarcastic comments: \n")
+# Topic 2
+top_topics <- topics(lda, 1)
+set.seed(123)
+sample(sarc_df_nz$comment[top_topics == 2 & sarc_df_nz$label==1], 5)
+
+
+cat("\n\n Topic 2, non-sarcastic comments: \n")
+# Topic 2
+top_topics <- topics(lda, 1)
+set.seed(123)
+sample(sarc_df_nz$comment[top_topics == 2 & sarc_df_nz$label==0], 5)
+```
+
+
+
+```{r}
+#Estimated proportion of sarcastic comments on topics
+# Topic 1
+posterior_topic <- posterior(lda)
+beta_matrix <- posterior_topic[["terms"]]
+theta_matrix <- posterior_topic[["topics"]]
+
+par(mfrow=c(2,3))
+# Add probability to df 
+sarc_df_nz$prob_topic <- theta_matrix[, 1] 
+
+# Now aggregate at the month level
+agg <- aggregate(prob_topic~label, data=sarc_df_nz, FUN=mean)
+
+label =c(0,1)
+# And plot it
+plot(label, agg$prob_topic, type="o", 
+     xlab="label", ylab="Avg. prob. of words ",
+     main="Topic 1")
+
+#Topic 2
+# Add probability to df 
+sarc_df_nz$prob_topic <- theta_matrix[, 2] 
+
+# Now aggregate at the month level
+agg <- aggregate(prob_topic~label, data=sarc_df_nz, FUN=mean)
+
+label =c(0,1)
+# And plot it
+plot(label, agg$prob_topic, type="o", 
+     xlab="label", ylab="Avg. prob. of words",
+     main="Topic 2")
+
+#Topic 3
+# Add probability to df 
+sarc_df_nz$prob_topic <- theta_matrix[, 3] 
+
+# Now aggregate at the month level
+agg <- aggregate(prob_topic~label, data=sarc_df_nz, FUN=mean)
+
+label =c(0,1)
+# And plot it
+plot(label, agg$prob_topic, type="o", 
+     xlab="label", ylab="Avg. prob. of words ",
+     main="Topic 3")
+
+
+#Topic 4
+# Add probability to df 
+sarc_df_nz$prob_topic <- theta_matrix[, 4] 
+
+# Now aggregate at the month level
+agg <- aggregate(prob_topic~label, data=sarc_df_nz, FUN=mean)
+
+label =c(0,1)
+# And plot it
+plot(label, agg$prob_topic, type="o", 
+     xlab="label", ylab="Avg. prob. of words",
+     main="Topic 4")
+
+#Topic 5
+# Add probability to df 
+sarc_df_nz$prob_topic <- theta_matrix[, 5] 
+
+# Now aggregate at the month level
+agg <- aggregate(prob_topic~label, data=sarc_df_nz, FUN=mean)
+
+label =c(0,1)
+# And plot it
+plot(label, agg$prob_topic, type="o", 
+     xlab="label", ylab="Avg. prob. of words",
+     main="Topic 5")
+
+
+#Topic 6
+# Add probability to df 
+sarc_df_nz$prob_topic <- theta_matrix[, 6] 
+
+# Now aggregate at the month level
+agg <- aggregate(prob_topic~label, data=sarc_df_nz, FUN=mean)
+
+label =c(0,1)
+# And plot it
+plot(label, agg$prob_topic, type="o", 
+     xlab="label", ylab="Avg. prob. of words",
+     main="Topic 6")
+```
+
+For the topic 1 , use the beta matrix to obtain the top 15 words. 
+
+```{r}
+top_words_from_beta_matrix <- beta_matrix[1, order(beta_matrix[1,], decreasing = TRUE)][1:15]
+top_words_from_beta_matrix
+
+# The same output from before
+paste(top_terms[,1], collapse=", ")
+```
+
+With the beta matrix, I the share of the word "yeah" in each of the topics. 
+
+```{r}
+# Finding the probability of the term "trade" in each of the topics
+probs <- beta_matrix[,lda@terms=="yeah"]
+# Normalizing so that probabilities add up to 1
+probs <- round(as.numeric(probs/sum(probs)),4)
+probs
+```
+
+
+
