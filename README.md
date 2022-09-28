@@ -1,17 +1,21 @@
-# Projects in Python and R during my MSc in Statistics
+# Projects during my MSc in Statistics using Python or R
 
 The work that is presented here is from my projects during my studies in the MSc Statistics at the London School of Economics in the years 2020 - 2022.
 
-Some projects are in R and some in Python.
 
 ## Projects in Python
 
 * For the module **"Managing and Visualizing Data"**
 
-  Main project: Analysis of US Car Accidents
+  * Main project: Analysis of US Car Accidents
   
-  Libraries used: pandas, numpy, json, math, missingno, requests, bs4, matplotlib, seaborn, sklearn, calendar, datetime, wordcloud, os, folium, earthpy, geopandas, plotly, xgboost
+    Libraries used: pandas, numpy, json, math, missingno, requests, bs4, matplotlib, seaborn, sklearn, calendar, datetime, wordcloud, os, folium, earthpy, geopandas, plotly, xgboost
 
+  * Small project: Matrix data visualization
+  
+    Libraries used: numpy, pandas, matplotlib, sklearn, seaborn
+
+    Visualize the co-usage of pairs of programming languages in GitHub repositories. Plot a heatmap visualizing the cosine similarity of pairs of programming languages with respect to their co-usage in GitHub repositories with the rows and the columns ordered according to random permutation and to a monotonic order of the Fiedler vector elements. Also, evaluate the robustness of the spectral co-clustering algorithm to random permutation of a matrix with a bi-cluster structure.
 
 * For the module **"Distributed Computing for Big Data"**
 
