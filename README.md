@@ -5,6 +5,7 @@ The work that is presented here is from my projects during my studies in the MSc
 The projects were part of the following modules, some in R and some in Python.
 
 * **Projects in Python**
+
 From the module "Managing and Visualizing Data"
 
 
@@ -13,6 +14,7 @@ From the module "Distributed Computing for Big Data"
 
 
 * **Projects in R**
+
 From the module "Social Network Analysis"
 
 
