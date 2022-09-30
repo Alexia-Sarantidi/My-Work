@@ -6,6 +6,7 @@ The work that is presented here is from my projects during my studies in the MSc
 ## Projects in Python
 
 * For the module **"Managing and Visualizing Data"**
+[Python projects](https://github.com/Alexia-Sarantidi/My-Work/tree/main/Python)
 
   * Main project: Analysis of US Car Accidents
   
