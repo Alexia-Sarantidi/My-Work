@@ -15,13 +15,12 @@ The work that is presented here is from my projects during my studies in the MSc
   
     Libraries used: numpy, pandas, matplotlib, sklearn, seaborn
 
-    Visualize the co-usage of pairs of programming languages in GitHub repositories. Visualize the cosine similarity of pairs of programming languages with respect to their co-usage in GitHub repositories with the rows and the columns ordered according to random permutation and to a monotonic order of the Fiedler vector elements. Also, evaluate the robustness of the spectral co-clustering algorithm to random permutation of a matrix with a bi-cluster structure.
+    ***Visualize the co-usage of pairs of programming languages in GitHub repositories. Visualize the cosine similarity of pairs of programming languages with respect to their co-usage in GitHub repositories with the rows and the columns ordered according to random permutation and to a monotonic order of the Fiedler vector elements. Also, evaluate the robustness of the spectral co-clustering algorithm to random permutation of a matrix with a bi-cluster structure.***
 
 * For the module **"Distributed Computing for Big Data"**
-
-Main project: Distributed machine learning algorithms on radio datasets
-
-Libraries used: pyspark.sql, pyspark.ml, scipy, numpy, matplotlib.pyplot, random, graphframes
+   * Main project: Distributed machine learning algorithms on radio datasets
+ 
+     Libraries used: pyspark.sql, pyspark.ml, scipy, numpy, matplotlib.pyplot, random, graphframes
 
 
 ## Projects in R
@@ -32,7 +31,7 @@ Libraries used: pyspark.sql, pyspark.ml, scipy, numpy, matplotlib.pyplot, random
 
   Libraries used: igraph, intergraph, sna, pheatmap, formattable, RColorBrewer, maps
 
-  The project analyzes networks representing student exchanges between universities in Europe, as part of the Erasmus programme.
+  ***The project analyzes networks representing student exchanges between universities in Europe, as part of the Erasmus programme.***
 
 
 * For the module **"Quantitative Text Analysis"**:
@@ -42,5 +41,5 @@ Libraries used: pyspark.sql, pyspark.ml, scipy, numpy, matplotlib.pyplot, random
   Libraries used: quanteda, tidyverse, stm, zoo, topicmodels, glmnet
   
   
-   The project identifies the features that reveal a sarcastic comment, based on the bag-of-words approach. 
-   The corpus is comments from a commentary website that are labelled on sarcasm. The methodology followed starts with descriptive statistics on the document variables and some linguistic features of the corpus in relation to sarcasm. Sentiment and morality dictionaries were applied to examine the relationship of sarcasm with them. Naïve Bayes and Lasso Regression Supervised Learning models were used to classify the documents and identify good predictors of sarcasm. Dissimilarity metrics were used to examine the effect of a different text structure to sarcasm between the original comment and its answer. Finally, structural topic models and Latent Dirichlet Allocation were used, to uncover possible themes on the comments and explore their relationship with sarcastic ones. 
+   ***The project identifies the features that reveal a sarcastic comment, based on the bag-of-words approach. 
+   The corpus is comments from a commentary website that are labelled on sarcasm. The methodology followed starts with descriptive statistics on the document variables and some linguistic features of the corpus in relation to sarcasm. Sentiment and morality dictionaries were applied to examine the relationship of sarcasm with them. Naïve Bayes and Lasso Regression Supervised Learning models were used to classify the documents and identify good predictors of sarcasm. Dissimilarity metrics were used to examine the effect of a different text structure to sarcasm between the original comment and its answer. Finally, structural topic models and Latent Dirichlet Allocation were used, to uncover possible themes on the comments and explore their relationship with sarcastic ones.***
