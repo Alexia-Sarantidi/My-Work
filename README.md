@@ -10,6 +10,9 @@ The work that is presented here is from my projects during my studies in the MSc
   * Main project: Analysis of US Car Accidents
   
     Libraries used: pandas, numpy, json, math, missingno, requests, bs4, matplotlib, seaborn, sklearn, calendar, datetime, wordcloud, os, folium, earthpy, geopandas, plotly, xgboost
+    
+    ***Explore and analyse the accidents in the United States. 
+    Data Cleansing, Data Exploration, Dimensionality Reduction, Predictive Modelling, Visualization techniques like word clouds, maps, violin plots and more. Google maps API was used to extract traffic data, Web-Scrapping was used to extract demographics.***
 
   * Small project: Matrix data visualization
   
@@ -21,6 +24,10 @@ The work that is presented here is from my projects during my studies in the MSc
    * Main project: Distributed machine learning algorithms on radio datasets
  
      Libraries used: pyspark.sql, pyspark.ml, scipy, numpy, matplotlib.pyplot, random, graphframes
+     
+   * Small project 1: Data exploration using Spark RDDs, Spark SQL and Hive
+   
+   * Small project 2: Graph data processing and Topic modelling
 
 
 ## Projects in R
