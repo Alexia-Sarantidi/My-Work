@@ -15,11 +15,13 @@ The work that is presented here is from my projects during my studies in the MSc
   
     Libraries used: numpy, pandas, matplotlib, sklearn, seaborn
 
-    Visualize the co-usage of pairs of programming languages in GitHub repositories. Plot a heatmap visualizing the cosine similarity of pairs of programming languages with respect to their co-usage in GitHub repositories with the rows and the columns ordered according to random permutation and to a monotonic order of the Fiedler vector elements. Also, evaluate the robustness of the spectral co-clustering algorithm to random permutation of a matrix with a bi-cluster structure.
+    Visualize the co-usage of pairs of programming languages in GitHub repositories. Visualize the cosine similarity of pairs of programming languages with respect to their co-usage in GitHub repositories with the rows and the columns ordered according to random permutation and to a monotonic order of the Fiedler vector elements. Also, evaluate the robustness of the spectral co-clustering algorithm to random permutation of a matrix with a bi-cluster structure.
 
 * For the module **"Distributed Computing for Big Data"**
 
+Main project: Distributed machine learning algorithms on radio datasets
 
+Libraries used: pyspark.sql, pyspark.ml, scipy, numpy, matplotlib.pyplot, random, graphframes
 
 
 ## Projects in R
