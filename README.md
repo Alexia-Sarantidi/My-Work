@@ -3,10 +3,9 @@
 The work that is presented here is from my projects during my studies in the MSc Statistics at the London School of Economics in the years 2020 - 2022.
 
 
-## Projects in Python
+## [Projects in Python](https://github.com/Alexia-Sarantidi/My-Work/tree/main/Python)
 
 * For the module **"Managing and Visualizing Data"**
-[Python projects](https://github.com/Alexia-Sarantidi/My-Work/tree/main/Python)
 
   * Main project: Analysis of US Car Accidents
   
@@ -31,7 +30,7 @@ The work that is presented here is from my projects during my studies in the MSc
    * Small project 2: Graph data processing and Topic modelling
 
 
-## Projects in R
+## [Projects in R](https://github.com/Alexia-Sarantidi/My-Work/tree/main/R)
 
 * For the module **"Social Network Analysis"**:
 
